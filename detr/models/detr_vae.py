@@ -2,6 +2,7 @@
 """
 DETR model and criterion classes.
 """
+import pdb
 import torch
 from torch import nn
 from torch.autograd import Variable
@@ -235,7 +236,7 @@ def build(args):
     backbones = []
     backbone = build_backbone(args)
     backbones.append(backbone)
-
+    
     transformer = build_transformer(args)
 
     encoder = build_encoder(args)

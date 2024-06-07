@@ -1,5 +1,6 @@
 import time
 import os
+import pdb
 import numpy as np
 import argparse
 import matplotlib.pyplot as plt
@@ -41,7 +42,7 @@ def main(args):
         policy_cls = InsertionPolicy
     else:
         raise NotImplementedError
-
+    
     success = []
     for episode_idx in range(num_episodes):
         print(f'{episode_idx=}')

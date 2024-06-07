@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import os
+import pdb
 import h5py
 from torch.utils.data import TensorDataset, DataLoader
 
@@ -70,45 +71,43 @@ class EpisodicDataset(torch.utils.data.Dataset):
 
         # normalize image and change dtype to float
         image_data = image_data / 255.0
-        action_data = (action_data - self.norm_stats["action_mean"]) / self.norm_stats["action_std"]
-        qpos_data = (qpos_data - self.norm_stats["qpos_mean"]) / self.norm_stats["qpos_std"]
+        
+        action_mean_key, action_std_key = self.retrieve_key(self.norm_stats.keys(), "action_mean"), self.retrieve_key(self.norm_stats.keys(), "action_std")
+        action_data = (action_data - self.norm_stats[action_mean_key]) / self.norm_stats[action_std_key]
+
+        qpos_mean_key, qpos_std_key = self.retrieve_key(self.norm_stats.keys(), "qpos_mean"), self.retrieve_key(self.norm_stats.keys(), "qpos_std")
+        qpos_data = (qpos_data - self.norm_stats[qpos_mean_key]) / self.norm_stats[qpos_std_key]
 
         return image_data, qpos_data, action_data, is_pad
 
+    def retrieve_key(self, key_list, keyword):
+        for key in key_list:
+            if keyword in key: return key
 
-def get_norm_stats(dataset_dir, num_episodes):
-    all_qpos_data = []
-    all_action_data = []
+        raise Exception("Keyword {} is not found in the key list {}".format(keyword, key_list))
+
+def get_norm_stats(dataset_dir, num_episodes, norm_keys):
+    norm_data_dict = {key: [] for key in norm_keys}
+    mean_std_dict = {}
+    for key in norm_keys:
+        mean_std_dict[key + '_mean'] = []
+        mean_std_dict[key + '_std'] = []
+
     for episode_idx in range(num_episodes):
         dataset_path = os.path.join(dataset_dir, f'episode_{episode_idx}.hdf5')
         with h5py.File(dataset_path, 'r') as root:
-            qpos = root['/observations/qpos'][()]
-            qvel = root['/observations/qvel'][()]
-            action = root['/action'][()]
-        all_qpos_data.append(torch.from_numpy(qpos))
-        all_action_data.append(torch.from_numpy(action))
-    all_qpos_data = torch.stack(all_qpos_data)
-    all_action_data = torch.stack(all_action_data)
-    all_action_data = all_action_data
+            for norm_key in norm_keys:
+                norm_data_dict[norm_key].append(torch.from_numpy(root[norm_key][()]))
 
-    # normalize action data
-    action_mean = all_action_data.mean(dim=[0, 1], keepdim=True)
-    action_std = all_action_data.std(dim=[0, 1], keepdim=True)
-    action_std = torch.clip(action_std, 1e-2, np.inf) # clipping
+    for norm_key in norm_keys:
+        norm_data_dict[norm_key] = torch.stack(norm_data_dict[norm_key])
+        mean_std_dict[norm_key + '_mean'] = norm_data_dict[norm_key].mean(dim=[0, 1])
+        mean_std_dict[norm_key + '_std'] = norm_data_dict[norm_key].std(dim=[0, 1])
+        mean_std_dict[norm_key + '_std'] = torch.clip(mean_std_dict[norm_key + '_std'], 1e-2, np.inf) # avoid the std to be too small.
 
-    # normalize qpos data
-    qpos_mean = all_qpos_data.mean(dim=[0, 1], keepdim=True)
-    qpos_std = all_qpos_data.std(dim=[0, 1], keepdim=True)
-    qpos_std = torch.clip(qpos_std, 1e-2, np.inf) # clipping
+    return mean_std_dict
 
-    stats = {"action_mean": action_mean.numpy().squeeze(), "action_std": action_std.numpy().squeeze(),
-             "qpos_mean": qpos_mean.numpy().squeeze(), "qpos_std": qpos_std.numpy().squeeze(),
-             "example_qpos": qpos}
-
-    return stats
-
-
-def load_data(dataset_dir, num_episodes, camera_names, batch_size_train, batch_size_val):
+def load_data(dataset_dir, num_episodes, camera_names, batch_size_train, batch_size_val, norm_keys, is_debug):
     print(f'\nData from: {dataset_dir}\n')
     # obtain train test split
     train_ratio = 0.8
@@ -117,13 +116,18 @@ def load_data(dataset_dir, num_episodes, camera_names, batch_size_train, batch_s
     val_indices = shuffled_indices[int(train_ratio * num_episodes):]
 
     # obtain normalization stats for qpos and action
-    norm_stats = get_norm_stats(dataset_dir, num_episodes)
+    norm_stats = get_norm_stats(dataset_dir, num_episodes, norm_keys)
 
     # construct dataset and dataloader
     train_dataset = EpisodicDataset(train_indices, dataset_dir, camera_names, norm_stats)
     val_dataset = EpisodicDataset(val_indices, dataset_dir, camera_names, norm_stats)
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size_train, shuffle=True, pin_memory=True, num_workers=1, prefetch_factor=1)
-    val_dataloader = DataLoader(val_dataset, batch_size=batch_size_val, shuffle=True, pin_memory=True, num_workers=1, prefetch_factor=1)
+
+    if is_debug:
+        num_workers = 0
+    else:
+        num_workers = 1
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size_train, shuffle=True, pin_memory=True, num_workers=num_workers, prefetch_factor=1)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size_val, shuffle=True, pin_memory=True, num_workers=num_workers, prefetch_factor=1)
 
     return train_dataloader, val_dataloader, norm_stats, train_dataset.is_sim
 

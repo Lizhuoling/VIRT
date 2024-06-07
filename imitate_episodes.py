@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import os
+import pdb
 import pickle
 import argparse
 import matplotlib.pyplot as plt
@@ -32,7 +33,8 @@ def main(args):
     batch_size_train = args['batch_size']
     batch_size_val = args['batch_size']
     num_epochs = args['num_epochs']
-
+    is_debug = args['debug']
+    
     # get task parameters
     is_sim = task_name[:4] == 'sim_'
     if is_sim:
@@ -45,6 +47,7 @@ def main(args):
     num_episodes = task_config['num_episodes']
     episode_len = task_config['episode_len']
     camera_names = task_config['camera_names']
+    norm_keys = task_config['norm_keys']
 
     # fixed parameters
     state_dim = 14
@@ -89,7 +92,7 @@ def main(args):
     }
 
     if is_eval:
-        ckpt_names = [f'policy_best.ckpt']
+        ckpt_names = [f'policy_last.ckpt']  # 'policy_best.ckpt'
         results = []
         for ckpt_name in ckpt_names:
             success_rate, avg_return = eval_bc(config, ckpt_name, save_episode=True)
@@ -99,8 +102,8 @@ def main(args):
             print(f'{ckpt_name}: {success_rate=} {avg_return=}')
         print()
         exit()
-
-    train_dataloader, val_dataloader, stats, _ = load_data(dataset_dir, num_episodes, camera_names, batch_size_train, batch_size_val)
+    
+    train_dataloader, val_dataloader, stats, _ = load_data(dataset_dir, num_episodes, camera_names, batch_size_train, batch_size_val, norm_keys, is_debug = is_debug)
 
     # save dataset stats
     if not os.path.isdir(ckpt_dir):
@@ -161,7 +164,7 @@ def eval_bc(config, ckpt_name, save_episode=True):
     task_name = config['task_name']
     temporal_agg = config['temporal_agg']
     onscreen_cam = 'angle'
-
+    
     # load policy and stats
     ckpt_path = os.path.join(ckpt_dir, ckpt_name)
     policy = make_policy(policy_class, policy_config)
@@ -173,9 +176,9 @@ def eval_bc(config, ckpt_name, save_episode=True):
     stats_path = os.path.join(ckpt_dir, f'dataset_stats.pkl')
     with open(stats_path, 'rb') as f:
         stats = pickle.load(f)
-
-    pre_process = lambda s_qpos: (s_qpos - stats['qpos_mean']) / stats['qpos_std']
-    post_process = lambda a: a * stats['action_std'] + stats['action_mean']
+    
+    pre_process = lambda s_qpos: (s_qpos - stats['observations/qpos_mean'].numpy()) / stats['observations/qpos_std'].numpy()
+    post_process = lambda a: a * stats['action_std'].numpy() + stats['action_mean'].numpy()
 
     # load environment
     if real_robot:
@@ -233,6 +236,7 @@ def eval_bc(config, ckpt_name, save_episode=True):
 
                 ### process previous timestep to get qpos and image_list
                 obs = ts.observation
+    
                 if 'images' in obs:
                     image_list.append(obs['images'])
                 else:
@@ -377,10 +381,10 @@ def train_bc(train_dataloader, val_dataloader, config):
             summary_string += f'{k}: {v.item():.3f} '
         print(summary_string)
 
-        if epoch % 100 == 0:
-            ckpt_path = os.path.join(ckpt_dir, f'policy_epoch_{epoch}_seed_{seed}.ckpt')
-            torch.save(policy.state_dict(), ckpt_path)
-            plot_history(train_history, validation_history, epoch, ckpt_dir, seed)
+        # if epoch % 100 == 0:
+        #     ckpt_path = os.path.join(ckpt_dir, f'policy_epoch_{epoch}_seed_{seed}.ckpt')
+        #     torch.save(policy.state_dict(), ckpt_path)
+        #     plot_history(train_history, validation_history, epoch, ckpt_dir, seed)
 
     ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')
     torch.save(policy.state_dict(), ckpt_path)
@@ -424,6 +428,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', action='store', type=int, help='seed', required=True)
     parser.add_argument('--num_epochs', action='store', type=int, help='num_epochs', required=True)
     parser.add_argument('--lr', action='store', type=float, help='lr', required=True)
+    parser.add_argument('--debug', action='store_true')
 
     # for ACT
     parser.add_argument('--kl_weight', action='store', type=int, help='KL Weight', required=False)
