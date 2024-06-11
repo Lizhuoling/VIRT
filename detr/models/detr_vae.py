@@ -17,7 +17,7 @@ e = IPython.embed
 
 def reparametrize(mu, logvar):
     std = logvar.div(2).exp()
-    eps = Variable(std.data.new(std.size()).normal_())
+    eps = torch.Tensor(std.data.new(std.size()).normal_())
     return mu + std * eps
 
 
@@ -34,25 +34,25 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
 class DETRVAE(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, backbones, transformer, encoder, state_dim, num_queries, camera_names):
+    def __init__(self, backbones, transformer, encoder, state_dim, chunk_size, camera_names):
         """ Initializes the model.
         Parameters:
             backbones: torch module of the backbone to be used. See backbone.py
             transformer: torch module of the transformer architecture. See transformer.py
             state_dim: robot state dimension of the environment
-            num_queries: number of object queries, ie detection slot. This is the maximal number of objects
+            chunk_size: number of object queries, ie detection slot. This is the maximal number of objects
                          DETR can detect in a single image. For COCO, we recommend 100 queries.
             aux_loss: True if auxiliary decoding losses (loss at each decoder layer) are to be used.
         """
         super().__init__()
-        self.num_queries = num_queries
+        self.chunk_size = chunk_size
         self.camera_names = camera_names
         self.transformer = transformer
         self.encoder = encoder
         hidden_dim = transformer.d_model
         self.action_head = nn.Linear(hidden_dim, state_dim)
         self.is_pad_head = nn.Linear(hidden_dim, 1)
-        self.query_embed = nn.Embedding(num_queries, hidden_dim)
+        self.query_embed = nn.Embedding(chunk_size, hidden_dim)
         if backbones is not None:
             self.input_proj = nn.Conv2d(backbones[0].num_channels, hidden_dim, kernel_size=1)
             self.backbones = nn.ModuleList(backbones)
@@ -70,7 +70,7 @@ class DETRVAE(nn.Module):
         self.encoder_action_proj = nn.Linear(14, hidden_dim) # project action to embedding
         self.encoder_joint_proj = nn.Linear(14, hidden_dim)  # project qpos to embedding
         self.latent_proj = nn.Linear(hidden_dim, self.latent_dim*2) # project hidden state to latent std, var
-        self.register_buffer('pos_table', get_sinusoid_encoding_table(1+1+num_queries, hidden_dim)) # [CLS], qpos, a_seq
+        self.register_buffer('pos_table', get_sinusoid_encoding_table(1+1+chunk_size, hidden_dim)) # [CLS], qpos, a_seq
 
         # decoder extra parameters
         self.latent_out_proj = nn.Linear(self.latent_dim, hidden_dim) # project latent sample to embedding
@@ -83,6 +83,7 @@ class DETRVAE(nn.Module):
         env_state: None
         actions: batch, seq, action_dim
         """
+        
         is_training = actions is not None # train or val
         bs, _ = qpos.shape
         ### Obtain latent z from action sequence
@@ -93,20 +94,20 @@ class DETRVAE(nn.Module):
             qpos_embed = torch.unsqueeze(qpos_embed, axis=1)  # (bs, 1, hidden_dim)
             cls_embed = self.cls_embed.weight # (1, hidden_dim)
             cls_embed = torch.unsqueeze(cls_embed, axis=0).repeat(bs, 1, 1) # (bs, 1, hidden_dim)
-            encoder_input = torch.cat([cls_embed, qpos_embed, action_embed], axis=1) # (bs, seq+1, hidden_dim)
-            encoder_input = encoder_input.permute(1, 0, 2) # (seq+1, bs, hidden_dim)
+            encoder_input = torch.cat([cls_embed, qpos_embed, action_embed], axis=1) # (bs, seq+2, hidden_dim)
+            encoder_input = encoder_input.permute(1, 0, 2) # (seq+2, bs, hidden_dim)
             # do not mask cls token
             cls_joint_is_pad = torch.full((bs, 2), False).to(qpos.device) # False: not a padding
-            is_pad = torch.cat([cls_joint_is_pad, is_pad], axis=1)  # (bs, seq+1)
+            is_pad = torch.cat([cls_joint_is_pad, is_pad], axis=1)  # (bs, seq+2)
             # obtain position embedding
             pos_embed = self.pos_table.clone().detach()
-            pos_embed = pos_embed.permute(1, 0, 2)  # (seq+1, 1, hidden_dim)
+            pos_embed = pos_embed.permute(1, 0, 2)  # (seq+2, 1, hidden_dim)
             # query model
             encoder_output = self.encoder(encoder_input, pos=pos_embed, src_key_padding_mask=is_pad)
             encoder_output = encoder_output[0] # take cls output only
             latent_info = self.latent_proj(encoder_output)
-            mu = latent_info[:, :self.latent_dim]
-            logvar = latent_info[:, self.latent_dim:]
+            mu = latent_info[:, :self.latent_dim]   # Left shape: (B, latent_dim)
+            logvar = latent_info[:, self.latent_dim:]   # Left shape: (B, latent_dim)
             latent_sample = reparametrize(mu, logvar)
             latent_input = self.latent_out_proj(latent_sample)
         else:
@@ -148,7 +149,7 @@ class CNNMLP(nn.Module):
             backbones: torch module of the backbone to be used. See backbone.py
             transformer: torch module of the transformer architecture. See transformer.py
             state_dim: robot state dimension of the environment
-            num_queries: number of object queries, ie detection slot. This is the maximal number of objects
+            chunk_size: number of object queries, ie detection slot. This is the maximal number of objects
                          DETR can detect in a single image. For COCO, we recommend 100 queries.
             aux_loss: True if auxiliary decoding losses (loss at each decoder layer) are to be used.
         """
@@ -210,13 +211,13 @@ def mlp(input_dim, hidden_dim, output_dim, hidden_depth):
     return trunk
 
 
-def build_encoder(args):
-    d_model = args.hidden_dim # 256
-    dropout = args.dropout # 0.1
-    nhead = args.nheads # 8
-    dim_feedforward = args.dim_feedforward # 2048
-    num_encoder_layers = args.enc_layers # 4 # TODO shared with VAE decoder
-    normalize_before = args.pre_norm # False
+def build_encoder(cfg):
+    d_model = cfg['POLICY']['HIDDEN_DIM'] # 256
+    dropout = cfg['POLICY']['DROPOUT'] # 0.1
+    nhead = cfg['POLICY']['NHEADS'] # 8
+    dim_feedforward = cfg['POLICY']['DIM_FEEDFORWARD'] # 2048
+    num_encoder_layers = cfg['POLICY']['ENC_LAYERS'] # 4 # TODO shared with VAE decoder
+    normalize_before = False # False
     activation = "relu"
 
     encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward,
@@ -227,27 +228,26 @@ def build_encoder(args):
     return encoder
 
 
-def build(args):
+def build(cfg):
     state_dim = 14 # TODO hardcode
 
     # From state
     # backbone = None # from state for now, no need for conv nets
     # From image
     backbones = []
-    backbone = build_backbone(args)
+    backbone = build_backbone(cfg)
     backbones.append(backbone)
-    
-    transformer = build_transformer(args)
+    transformer = build_transformer(cfg)
 
-    encoder = build_encoder(args)
+    encoder = build_encoder(cfg)
 
     model = DETRVAE(
         backbones,
         transformer,
         encoder,
-        state_dim=state_dim,
-        num_queries=args.num_queries,
-        camera_names=args.camera_names,
+        state_dim=cfg['POLICY']['STATE_DIM'],
+        chunk_size=cfg['POLICY']['CHUNK_SIZE'],
+        camera_names=cfg['DATA']['CAMERA_NAMES'],
     )
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)

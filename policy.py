@@ -1,19 +1,18 @@
+import pdb
 import torch.nn as nn
 from torch.nn import functional as F
 import torchvision.transforms as transforms
 
-from detr.main import build_ACT_model_and_optimizer, build_CNNMLP_model_and_optimizer
+from detr.main import get_ACT_model, get_CNNMLP_model
 import IPython
 e = IPython.embed
 
 class ACTPolicy(nn.Module):
-    def __init__(self, args_override):
+    def __init__(self, cfg):
         super().__init__()
-        model, optimizer = build_ACT_model_and_optimizer(args_override)
+        model = get_ACT_model(cfg)
         self.model = model # CVAE decoder
-        self.optimizer = optimizer
-        self.kl_weight = args_override['kl_weight']
-        print(f'KL Weight {self.kl_weight}')
+        self.kl_weight = cfg['POLICY']['KL_WEIGHT']
 
     def __call__(self, qpos, image, actions=None, is_pad=None):
         env_state = None
@@ -21,10 +20,8 @@ class ACTPolicy(nn.Module):
                                          std=[0.229, 0.224, 0.225])
         image = normalize(image)
         if actions is not None: # training time
-            actions = actions[:, :self.model.num_queries]
-            is_pad = is_pad[:, :self.model.num_queries]
 
-            a_hat, is_pad_hat, (mu, logvar) = self.model(qpos, image, env_state, actions, is_pad)
+            a_hat, is_pad_hat, (mu, logvar) = self.model(qpos = qpos, image = image, env_state = env_state, actions = actions, is_pad = is_pad)
             total_kld, dim_wise_kld, mean_kld = kl_divergence(mu, logvar)
             loss_dict = dict()
             all_l1 = F.l1_loss(actions, a_hat, reduction='none')
@@ -37,16 +34,11 @@ class ACTPolicy(nn.Module):
             a_hat, _, (_, _) = self.model(qpos, image, env_state) # no action, sample from prior
             return a_hat
 
-    def configure_optimizers(self):
-        return self.optimizer
-
-
 class CNNMLPPolicy(nn.Module):
     def __init__(self, args_override):
         super().__init__()
-        model, optimizer = build_CNNMLP_model_and_optimizer(args_override)
+        model = get_CNNMLP_model(args_override)
         self.model = model # decoder
-        self.optimizer = optimizer
 
     def __call__(self, qpos, image, actions=None, is_pad=None):
         env_state = None # TODO

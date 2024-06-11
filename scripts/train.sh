@@ -1,10 +1,16 @@
-exp_id=sim_transfer_cube_scripted
-task_name=sim_transfer_cube_scripted 
+exp_id=sim_transfer_cube_scripted2
+config_name=sim_transfer_cube_scripted 
 
-CUDA_VISIBLE_DEVICES=1 python3 imitate_episodes.py \
-    --task_name $task_name \
+nnodes=1
+nproc_per_node=1
+node_rank=0
+master_addr=172.17.167.131
+master_port=29514
+
+CUDA_VISIBLE_DEVICES=0 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_node --node_rank=$node_rank --master_addr=$master_addr --master_port $master_port \
+    imitate_episodes.py \
+    --config_name $config_name \
     --ckpt_dir ./outputs/$exp_id \
-    --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 8 --dim_feedforward 3200 \
-    --num_epochs 2000  --lr 1e-5 \
-    --seed 0 \
+    --data_dir ./datasets/sim_transfer_cube_scripted \
+    --num_nodes $nnodes \
     #--debug \

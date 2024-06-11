@@ -1,4 +1,4 @@
 xvfb-run -a python3 record_sim_episodes.py \
-    --task_name sim_transfer_cube_scripted \
-    --dataset_dir /home/twilight/home/data/aloha/sim_transfer_cube_scripted \
+    --task_name sim_insertion_scripted \
+    --dataset_dir /home/twilight/home/data/aloha/sim_insertion_scripted \
     --num_episodes 50

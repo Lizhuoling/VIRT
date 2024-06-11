@@ -2,7 +2,10 @@ import torch
 import numpy as np
 import os
 import pdb
+import time
 import pickle
+import datetime
+import logging
 import argparse
 import matplotlib.pyplot as plt
 from copy import deepcopy
@@ -11,11 +14,20 @@ from einops import rearrange
 
 from constants import DT
 from constants import PUPPET_GRIPPER_JOINT_OPEN
-from utils import load_data # data functions
-from utils import sample_box_pose, sample_insertion_pose # robot functions
-from utils import compute_dict_mean, set_seed, detach_dict # helper functions
+from dataset import load_data # data functions
+from dataset import sample_box_pose, sample_insertion_pose # robot functions
+from dataset import compute_dict_mean, detach_dict # helper functions
+from utils.utils import set_seed
+from utils.engine import launch
+from utils import comm
+from utils.optimizer import make_optimizer, make_scheduler
+from utils.check_point import DetectronCheckpointer
+from utils.metric_logger import MetricLogger
+from utils.logger import setup_logger
+from utils.transforms import build_transforms
 from policy import ACTPolicy, CNNMLPPolicy
 from visualize_episodes import save_videos
+from configs.utils import load_yaml_with_base
 
 from sim_env import BOX_POSE
 
@@ -23,151 +35,88 @@ import IPython
 e = IPython.embed
 
 def main(args):
-    set_seed(1)
-    # command line parameters
-    is_eval = args['eval']
-    ckpt_dir = args['ckpt_dir']
-    policy_class = args['policy_class']
-    onscreen_render = args['onscreen_render']
-    task_name = args['task_name']
-    batch_size_train = args['batch_size']
-    batch_size_val = args['batch_size']
-    num_epochs = args['num_epochs']
-    is_debug = args['debug']
+    # Initialize logger
+    if not os.path.exists(args.ckpt_dir):
+        os.makedirs(args.ckpt_dir)
+    exp_start_time = datetime.datetime.strftime(datetime.datetime.now(), '%m-%d %H:%M:%S')
+    rank = comm.get_rank()
+    logger = setup_logger(args.ckpt_dir, rank, file_name="log_{}.txt".format(exp_start_time))
+    if comm.is_main_process():
+        logger.info("Using {} GPUs".format(comm.get_world_size()))
+        logger.info("Collecting environment info")
+        logger.info(args) 
+        logger.info("Loaded configuration file {}".format(args.config_name+'.yaml'))
     
-    # get task parameters
-    is_sim = task_name[:4] == 'sim_'
-    if is_sim:
-        from constants import SIM_TASK_CONFIGS
-        task_config = SIM_TASK_CONFIGS[task_name]
-    else:
-        from aloha_scripts.constants import TASK_CONFIGS
-        task_config = TASK_CONFIGS[task_name]
-    dataset_dir = task_config['dataset_dir']
-    num_episodes = task_config['num_episodes']
-    episode_len = task_config['episode_len']
-    camera_names = task_config['camera_names']
-    norm_keys = task_config['norm_keys']
+    # Initialize cfg
+    cfg = load_yaml_with_base(os.path.join('configs', args.config_name+'.yaml'))
+    cfg['IS_EVAL'] = args.eval
+    cfg['CKPT_DIR'] = args.ckpt_dir
+    cfg['DATASET_DIR'] = args.data_dir
+    cfg['ONSCREEN_RENDER'] = args.onscreen_render
+    cfg['IS_DEBUG'] = args.debug
+    cfg['NUM_NODES'] = args.num_nodes
+    cfg['EVAL']['REAL_ROBOT'] = args.real_robot
+    
+    if cfg['SEED'] >= 0:
+        set_seed(cfg['SEED'])
 
-    # fixed parameters
-    state_dim = 14
-    lr_backbone = 1e-5
-    backbone = 'resnet18'
-    if policy_class == 'ACT':
-        enc_layers = 4
-        dec_layers = 7
-        nheads = 8
-        policy_config = {'lr': args['lr'],
-                         'num_queries': args['chunk_size'],
-                         'kl_weight': args['kl_weight'],
-                         'hidden_dim': args['hidden_dim'],
-                         'dim_feedforward': args['dim_feedforward'],
-                         'lr_backbone': lr_backbone,
-                         'backbone': backbone,
-                         'enc_layers': enc_layers,
-                         'dec_layers': dec_layers,
-                         'nheads': nheads,
-                         'camera_names': camera_names,
-                         }
-    elif policy_class == 'CNNMLP':
-        policy_config = {'lr': args['lr'], 'lr_backbone': lr_backbone, 'backbone' : backbone, 'num_queries': 1,
-                         'camera_names': camera_names,}
-    else:
-        raise NotImplementedError
-
-    config = {
-        'num_epochs': num_epochs,
-        'ckpt_dir': ckpt_dir,
-        'episode_len': episode_len,
-        'state_dim': state_dim,
-        'lr': args['lr'],
-        'policy_class': policy_class,
-        'onscreen_render': onscreen_render,
-        'policy_config': policy_config,
-        'task_name': task_name,
-        'seed': args['seed'],
-        'temporal_agg': args['temporal_agg'],
-        'camera_names': camera_names,
-        'real_robot': not is_sim
-    }
-
-    if is_eval:
-        ckpt_names = [f'policy_last.ckpt']  # 'policy_best.ckpt'
+    if cfg['IS_EVAL']:
+        ckpt_names = [f'policy_last.ckpt']
         results = []
         for ckpt_name in ckpt_names:
-            success_rate, avg_return = eval_bc(config, ckpt_name, save_episode=True)
+            success_rate, avg_return = eval_bc(cfg, ckpt_name, save_episode=True)
             results.append([ckpt_name, success_rate, avg_return])
 
         for ckpt_name, success_rate, avg_return in results:
             print(f'{ckpt_name}: {success_rate=} {avg_return=}')
-        print()
         exit()
     
-    train_dataloader, val_dataloader, stats, _ = load_data(dataset_dir, num_episodes, camera_names, batch_size_train, batch_size_val, norm_keys, is_debug = is_debug)
-
+    train_dataloader, val_dataloader, stats, _ = load_data(cfg)
+    
     # save dataset stats
-    if not os.path.isdir(ckpt_dir):
-        os.makedirs(ckpt_dir)
-    stats_path = os.path.join(ckpt_dir, f'dataset_stats.pkl')
+    if not os.path.isdir(cfg['CKPT_DIR']):
+        os.makedirs(cfg['CKPT_DIR'])
+    stats_path = os.path.join(cfg['CKPT_DIR'], f'dataset_stats.pkl')
     with open(stats_path, 'wb') as f:
         pickle.dump(stats, f)
 
-    best_ckpt_info = train_bc(train_dataloader, val_dataloader, config)
-    best_epoch, min_val_loss, best_state_dict = best_ckpt_info
+    train_bc(train_dataloader, val_dataloader, cfg)
 
-    # save best checkpoint
-    ckpt_path = os.path.join(ckpt_dir, f'policy_best.ckpt')
-    torch.save(best_state_dict, ckpt_path)
-    print(f'Best ckpt, val loss {min_val_loss:.6f} @ epoch{best_epoch}')
-
-
-def make_policy(policy_class, policy_config):
+def make_policy(policy_class, cfg):
     if policy_class == 'ACT':
-        policy = ACTPolicy(policy_config)
+        policy = ACTPolicy(cfg)
     elif policy_class == 'CNNMLP':
-        policy = CNNMLPPolicy(policy_config)
+        policy = CNNMLPPolicy(cfg)
     else:
         raise NotImplementedError
     return policy
 
-
-def make_optimizer(policy_class, policy):
-    if policy_class == 'ACT':
-        optimizer = policy.configure_optimizers()
-    elif policy_class == 'CNNMLP':
-        optimizer = policy.configure_optimizers()
-    else:
-        raise NotImplementedError
-    return optimizer
-
-
-def get_image(ts, camera_names):
+def inference_get_images(ts, camera_names, inference_transforms):
     curr_images = []
     for cam_name in camera_names:
         curr_image = rearrange(ts.observation['images'][cam_name], 'h w c -> c h w')
         curr_images.append(curr_image)
     curr_image = np.stack(curr_images, axis=0)
-    curr_image = torch.from_numpy(curr_image / 255.0).float().cuda().unsqueeze(0)
-    return curr_image
+    curr_image = torch.from_numpy(curr_image).float()
+    curr_image, _, _, _ = inference_transforms(curr_image, None, None, None)
+    return curr_image.cuda().unsqueeze(0)
 
 
-def eval_bc(config, ckpt_name, save_episode=True):
-    set_seed(1000)
-    ckpt_dir = config['ckpt_dir']
-    state_dim = config['state_dim']
-    real_robot = config['real_robot']
-    policy_class = config['policy_class']
-    onscreen_render = config['onscreen_render']
-    policy_config = config['policy_config']
-    camera_names = config['camera_names']
-    max_timesteps = config['episode_len']
-    task_name = config['task_name']
-    temporal_agg = config['temporal_agg']
+def eval_bc(cfg, ckpt_name, save_episode=True):
+    ckpt_dir = cfg['CKPT_DIR']
+    state_dim = cfg['POLICY']['STATE_DIM']
+    real_robot = cfg['EVAL']['REAL_ROBOT']
+    policy_class = cfg['POLICY']['POLICY_NAME']
+    onscreen_render = cfg['ONSCREEN_RENDER']
+    camera_names = cfg['DATA']['CAMERA_NAMES']
+    max_timesteps = cfg['POLICY']['EPISODE_LEN']
+    task_name = cfg['TASK_NAME']
+    temporal_agg = cfg['POLICY']['TEMPORAL_AGG']
     onscreen_cam = 'angle'
     
     # load policy and stats
     ckpt_path = os.path.join(ckpt_dir, ckpt_name)
-    policy = make_policy(policy_class, policy_config)
+    policy = make_policy(policy_class, cfg)
     loading_status = policy.load_state_dict(torch.load(ckpt_path))
     print(loading_status)
     policy.cuda()
@@ -179,7 +128,8 @@ def eval_bc(config, ckpt_name, save_episode=True):
     
     pre_process = lambda s_qpos: (s_qpos - stats['observations/qpos_mean'].numpy()) / stats['observations/qpos_std'].numpy()
     post_process = lambda a: a * stats['action_std'].numpy() + stats['action_mean'].numpy()
-
+    inference_transforms = build_transforms(cfg)
+    
     # load environment
     if real_robot:
         from aloha_scripts.robot_utils import move_grippers # requires aloha
@@ -191,10 +141,10 @@ def eval_bc(config, ckpt_name, save_episode=True):
         env = make_sim_env(task_name)
         env_max_reward = env.task.max_reward
 
-    query_frequency = policy_config['num_queries']
+    query_frequency = cfg['POLICY']['CHUNK_SIZE']
     if temporal_agg:
         query_frequency = 1
-        num_queries = policy_config['num_queries']
+        num_queries = cfg['POLICY']['CHUNK_SIZE']
 
     max_timesteps = int(max_timesteps * 1) # may increase for real-world tasks
 
@@ -245,10 +195,10 @@ def eval_bc(config, ckpt_name, save_episode=True):
                 qpos = pre_process(qpos_numpy)
                 qpos = torch.from_numpy(qpos).float().cuda().unsqueeze(0)
                 qpos_history[:, t] = qpos
-                curr_image = get_image(ts, camera_names)
+                curr_image = inference_get_images(ts, camera_names, inference_transforms)
 
                 ### query policy
-                if config['policy_class'] == "ACT":
+                if cfg['POLICY']['POLICY_NAME'] == "ACT":
                     if t % query_frequency == 0:
                         all_actions = policy(qpos, curr_image)
                     if temporal_agg:
@@ -263,7 +213,7 @@ def eval_bc(config, ckpt_name, save_episode=True):
                         raw_action = (actions_for_curr_step * exp_weights).sum(dim=0, keepdim=True)
                     else:
                         raw_action = all_actions[:, t % query_frequency]
-                elif config['policy_class'] == "CNNMLP":
+                elif cfg['POLICY']['POLICY_NAME'] == "CNNMLP":
                     raw_action = policy(qpos, curr_image)
                 else:
                     raise NotImplementedError
@@ -320,121 +270,127 @@ def eval_bc(config, ckpt_name, save_episode=True):
 def forward_pass(data, policy):
     image_data, qpos_data, action_data, is_pad = data
     image_data, qpos_data, action_data, is_pad = image_data.cuda(), qpos_data.cuda(), action_data.cuda(), is_pad.cuda()
-    return policy(qpos_data, image_data, action_data, is_pad) # TODO remove None
+    return policy(qpos_data, image_data, action_data, is_pad)
 
 
-def train_bc(train_dataloader, val_dataloader, config):
-    num_epochs = config['num_epochs']
-    ckpt_dir = config['ckpt_dir']
-    seed = config['seed']
-    policy_class = config['policy_class']
-    policy_config = config['policy_config']
+def train_bc(train_dataloader, val_dataloader, cfg):
+    logger = logging.getLogger("grasp")
 
-    set_seed(seed)
+    num_iterations = cfg['TRAIN']['NUM_ITERATIONS']
+    ckpt_dir = cfg['CKPT_DIR']
+    seed = cfg['SEED']
+    policy_class = cfg['POLICY']['POLICY_NAME']
 
-    policy = make_policy(policy_class, policy_config)
+    policy = make_policy(policy_class, cfg)
     policy.cuda()
-    optimizer = make_optimizer(policy_class, policy)
+    optimizer = make_optimizer(policy, cfg)
+    scheduler, warmup_scheduler = make_scheduler(optimizer, cfg=cfg)
+    
+    main_thread = comm.get_rank() == 0
 
-    train_history = []
-    validation_history = []
+    if cfg['TRAIN']['LR_WARMUP']:
+        assert warmup_scheduler is not None
+        warmup_iters = cfg['TRAIN']['WARMUP_STEPS']
+    else:
+        warmup_iters = -1
+
     min_val_loss = np.inf
     best_ckpt_info = None
-    for epoch in tqdm(range(num_epochs)):
-        print(f'\nEpoch {epoch}')
-        # validation
-        with torch.inference_mode():
-            policy.eval()
-            epoch_dicts = []
-            for batch_idx, data in enumerate(val_dataloader):
-                forward_dict = forward_pass(data, policy)
-                epoch_dicts.append(forward_dict)
-            epoch_summary = compute_dict_mean(epoch_dicts)
-            validation_history.append(epoch_summary)
+    start_training_time = time.time()
+    end = time.time()
+    train_meters = MetricLogger(delimiter=", ", )
 
-            epoch_val_loss = epoch_summary['loss']
-            if epoch_val_loss < min_val_loss:
-                min_val_loss = epoch_val_loss
-                best_ckpt_info = (epoch, min_val_loss, deepcopy(policy.state_dict()))
-        print(f'Val loss:   {epoch_val_loss:.5f}')
-        summary_string = ''
-        for k, v in epoch_summary.items():
-            summary_string += f'{k}: {v.item():.3f} '
-        print(summary_string)
+    for data, iter_cnt in zip(train_dataloader, range(num_iterations)):
+        data_time = time.time() - end
 
         # training
         policy.train()
         optimizer.zero_grad()
-        for batch_idx, data in enumerate(train_dataloader):
-            forward_dict = forward_pass(data, policy)
-            # backward
-            loss = forward_dict['loss']
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-            train_history.append(detach_dict(forward_dict))
-        epoch_summary = compute_dict_mean(train_history[(batch_idx+1)*epoch:(batch_idx+1)*(epoch+1)])
-        epoch_train_loss = epoch_summary['loss']
-        print(f'Train loss: {epoch_train_loss:.5f}')
-        summary_string = ''
-        for k, v in epoch_summary.items():
-            summary_string += f'{k}: {v.item():.3f} '
-        print(summary_string)
+        forward_dict = forward_pass(data, policy)
+        # backward
+        loss = forward_dict['loss']
+        loss.backward()
+        optimizer.step()
+        if iter_cnt < warmup_iters:
+            warmup_scheduler.step(iter_cnt)
+        else:
+            scheduler.step(iter_cnt)
 
-        # if epoch % 100 == 0:
-        #     ckpt_path = os.path.join(ckpt_dir, f'policy_epoch_{epoch}_seed_{seed}.ckpt')
-        #     torch.save(policy.state_dict(), ckpt_path)
-        #     plot_history(train_history, validation_history, epoch, ckpt_dir, seed)
+        train_meters.update(**forward_dict)
+        batch_time = time.time() - end
+        end = time.time()
+        train_meters.update(time=batch_time, data=data_time)
+        eta_seconds = train_meters.time.global_avg * (num_iterations - iter_cnt)
+        eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+        
+        # log
+        if main_thread and (iter_cnt % cfg['TRAIN']['LOG_INTERVAL'] == 0 or iter_cnt == num_iterations - 1):
+            logger.info(
+                train_meters.delimiter.join(
+                    [
+                        "eta: {eta}",
+                        "iter: {iter}",
+                        "{meters}",
+                        "lr: {lr:.8f} \n",
+                    ]
+                ).format(
+                    eta=eta_string,
+                    iter=iter_cnt,
+                    meters=str(train_meters),
+                    lr=optimizer.param_groups[0]["lr"],
+                )
+            )
 
-    ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')
-    torch.save(policy.state_dict(), ckpt_path)
+        # validation
+        if main_thread and iter_cnt % cfg['EVAL']['EVAL_INTERVAL'] == 0 and iter_cnt != 0:
+            logger.info("Start evaluation at iteration {}...".format(iter_cnt))
+            with torch.inference_mode():
+                policy.eval()
+                epoch_dicts = []
 
-    best_epoch, min_val_loss, best_state_dict = best_ckpt_info
-    ckpt_path = os.path.join(ckpt_dir, f'policy_epoch_{best_epoch}_seed_{seed}.ckpt')
-    torch.save(best_state_dict, ckpt_path)
-    print(f'Training finished:\nSeed {seed}, val loss {min_val_loss:.6f} at epoch {best_epoch}')
+                eval_total_iter_num = len(val_dataloader)
+                if eval_total_iter_num > cfg['EVAL']['MAX_VAL_SAMPLE_NUM']:
+                    eval_total_iter_num = cfg['EVAL']['MAX_VAL_SAMPLE_NUM']
 
-    # save training curves
-    plot_history(train_history, validation_history, num_epochs, ckpt_dir, seed)
+                for eval_data, eval_iter_cnt in zip(val_dataloader, range(eval_total_iter_num)):
+                    forward_dict = forward_pass(data, policy)
+                    epoch_dicts.append(forward_dict)
+                epoch_summary = compute_dict_mean(epoch_dicts)
 
-    return best_ckpt_info
+                epoch_val_loss = epoch_summary['loss']
+                if epoch_val_loss < min_val_loss:
+                    min_val_loss = epoch_val_loss
+                    best_ckpt_info = (iter_cnt, min_val_loss, deepcopy(policy.state_dict()))
+            summary_string = 'Evaluation result:'
+            for k, v in epoch_summary.items():
+                summary_string += f'{k}: {v.item():.3f} '
+            logger.info(summary_string)
 
+        # Save checkpoint
+        if main_thread and iter_cnt % cfg['TRAIN']['SAVE_CHECKPOINT_INTERVAL'] == 0 and iter_cnt != 0:
+            ckpt_path = os.path.join(ckpt_dir, f'policy_iter{iter_cnt}.ckpt')
+            torch.save(policy.state_dict(), ckpt_path)
 
-def plot_history(train_history, validation_history, num_epochs, ckpt_dir, seed):
-    # save training curves
-    for key in train_history[0]:
-        plot_path = os.path.join(ckpt_dir, f'train_val_{key}_seed_{seed}.png')
-        plt.figure()
-        train_values = [summary[key].item() for summary in train_history]
-        val_values = [summary[key].item() for summary in validation_history]
-        plt.plot(np.linspace(0, num_epochs-1, len(train_history)), train_values, label='train')
-        plt.plot(np.linspace(0, num_epochs-1, len(validation_history)), val_values, label='validation')
-        # plt.ylim([-0.1, 1])
-        plt.tight_layout()
-        plt.legend()
-        plt.title(key)
-        plt.savefig(plot_path)
-    print(f'Saved plots to {ckpt_dir}')
+    if main_thread:
+        ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')
+        torch.save(policy.state_dict(), ckpt_path)
+        best_iter, min_val_loss, best_state_dict = best_ckpt_info
+        logger.info(f'Training finished:\nSeed {seed}, val loss {min_val_loss:.6f} at iteration {best_iter}')
 
+    comm.synchronize()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--eval', action='store_true')
+    parser.add_argument('--config_name', action='store', type=str, help='configuration file name', required=True)
     parser.add_argument('--onscreen_render', action='store_true')
-    parser.add_argument('--ckpt_dir', action='store', type=str, help='ckpt_dir', required=True)
-    parser.add_argument('--policy_class', action='store', type=str, help='policy_class, capitalize', required=True)
-    parser.add_argument('--task_name', action='store', type=str, help='task_name', required=True)
-    parser.add_argument('--batch_size', action='store', type=int, help='batch_size', required=True)
-    parser.add_argument('--seed', action='store', type=int, help='seed', required=True)
-    parser.add_argument('--num_epochs', action='store', type=int, help='num_epochs', required=True)
-    parser.add_argument('--lr', action='store', type=float, help='lr', required=True)
+    parser.add_argument('--eval', action='store_true')
+    parser.add_argument('--ckpt_dir', action='store', type=str, help='saving directory', required=True)
+    parser.add_argument('--data_dir', action='store', type=str, help='dataset folder path', required=True)
+    parser.add_argument('--real_robot', action='store_true')
     parser.add_argument('--debug', action='store_true')
 
-    # for ACT
-    parser.add_argument('--kl_weight', action='store', type=int, help='KL Weight', required=False)
-    parser.add_argument('--chunk_size', action='store', type=int, help='chunk_size', required=False)
-    parser.add_argument('--hidden_dim', action='store', type=int, help='hidden_dim', required=False)
-    parser.add_argument('--dim_feedforward', action='store', type=int, help='dim_feedforward', required=False)
-    parser.add_argument('--temporal_agg', action='store_true')
+    parser.add_argument('--num_nodes', default = 1, type = int, help = "The number of nodes.")
     
-    main(vars(parser.parse_args()))
+    args = parser.parse_args()
+
+    launch(main, args)

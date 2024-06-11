@@ -3,6 +3,7 @@
 Backbone modules.
 """
 from collections import OrderedDict
+import pdb
 
 import torch
 import torch.nn.functional as F
@@ -112,11 +113,11 @@ class Joiner(nn.Sequential):
         return out, pos
 
 
-def build_backbone(args):
-    position_embedding = build_position_encoding(args)
-    train_backbone = args.lr_backbone > 0
-    return_interm_layers = args.masks
-    backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation)
+def build_backbone(cfg):
+    position_embedding = build_position_encoding(cfg)
+    train_backbone = cfg['TRAIN']['LR_BACKBONE'] > 0
+    return_interm_layers = False
+    backbone = Backbone(cfg["POLICY"]["BACKBONE"], train_backbone, return_interm_layers, False)
     model = Joiner(backbone, position_embedding)
     model.num_channels = backbone.num_channels
     return model

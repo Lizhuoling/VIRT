@@ -1,7 +1,7 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 """
 Various positional encodings for the transformer.
 """
+import pdb
 import math
 import torch
 from torch import nn
@@ -80,14 +80,15 @@ class PositionEmbeddingLearned(nn.Module):
         return pos
 
 
-def build_position_encoding(args):
-    N_steps = args.hidden_dim // 2
-    if args.position_embedding in ('v2', 'sine'):
+def build_position_encoding(cfg):
+    N_steps = cfg['POLICY']['HIDDEN_DIM'] // 2
+
+    if cfg['POLICY']['POSITION_EMBEDDING'] in ('v2', 'sine'):
         # TODO find a better way of exposing other arguments
         position_embedding = PositionEmbeddingSine(N_steps, normalize=True)
-    elif args.position_embedding in ('v3', 'learned'):
+    elif cfg['POLICY']['POSITION_EMBEDDING'] in ('v3', 'learned'):
         position_embedding = PositionEmbeddingLearned(N_steps)
     else:
-        raise ValueError(f"not supported {args.position_embedding}")
+        raise ValueError(f"not supported {cfg['POLICY']['POSITION_EMBEDDING']}")
 
     return position_embedding

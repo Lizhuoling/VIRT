@@ -1,0 +1,55 @@
+TASK_NAME: 'sim_transfer_cube_scripted'
+
+SEED: -1
+NUM_NODES: 1
+IS_EVAL: False
+IS_DEBUG: False
+CKPT_DIR: "./outputs/debug"
+DATASET_DIR: "./data/sim_transfer_cube_scripted"
+ONSCREEN_RENDER: False
+
+
+POLICY:
+  POLICY_NAME: "ACT"
+  BACKBONE: "resnet18"
+  KL_WEIGHT: 10
+  CHUNK_SIZE: 100
+  HIDDEN_DIM: 512
+  DIM_FEEDFORWARD: 3200
+  EPISODE_LEN: 400
+  TEMPORAL_AGG: False
+  STATE_DIM: 14
+  POSITION_EMBEDDING: 'sine'
+  DROPOUT: 0.1
+  NHEADS: 8
+  ENC_LAYERS: 4
+  DEC_LAYERS: 7
+
+TRAIN:
+  NUM_ITERATIONS: 100000
+  SAVE_CHECKPOINT_INTERVAL: 50000
+  LOG_INTERVAL: 100
+  DECAY_LR_ITER_STEPS: [80000, 90000]
+  LR_WARMUP: True
+  WARMUP_STEPS: 1000
+  OPTIMIZER: 'adamw'
+  LR: 0.00001
+  LR_BACKBONE: 0.00001
+  LR_DECAY: 0.1
+  LR_CLIP: 0.0000001 # minimal learning rate
+  WEIGHT_DECAY: 0.0001
+  BATCH_SIZE: 8
+
+EVAL:
+  BATCH_SIZE: 8
+  DATA_EVAL_RATIO: 0.1
+  EVAL_INTERVAL: 50000
+  MAX_VAL_SAMPLE_NUM: 300
+  REAL_ROBOT: False
+
+DATA:
+  CAMERA_NAMES: ['top']
+  INPUT_KEYS: ['action', 'observations/qpos', 'observations/images/top',]
+  NORM_KEYS: ['action', 'observations/qpos',]
+  IMG_NORM_MEAN: [0.485, 0.456, 0.406]
+  IMG_NORM_STD: [0.229, 0.224, 0.225]
