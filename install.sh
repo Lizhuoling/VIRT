@@ -9,10 +9,11 @@ pip install rospkg
 pip install pexpect
 pip install mujoco==2.3.7
 pip install dm_control==1.0.14
-pip install opencv-python
-pip install matplotlib
-pip install einops
-pip install packaging
-pip install h5py
-pip install ipython
+pip install opencv-python -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install matplotlib -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install einops -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install packaging -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install h5py -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install ipython -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install numpy==1.26.4 -i https://pypi.tuna.tsinghua.edu.cn/simple
 cd act/detr && pip install -e .

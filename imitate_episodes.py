@@ -64,7 +64,7 @@ def main(args):
         ckpt_names = [f'policy_last.ckpt']
         results = []
         for ckpt_name in ckpt_names:
-            success_rate, avg_return = eval_bc(cfg, ckpt_name, save_episode=True)
+            success_rate, avg_return = eval_bc(cfg, ckpt_name, save_episode=args.save_episode)
             results.append([ckpt_name, success_rate, avg_return])
 
         for ckpt_name, success_rate, avg_return in results:
@@ -388,6 +388,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_dir', action='store', type=str, help='dataset folder path', required=True)
     parser.add_argument('--real_robot', action='store_true')
     parser.add_argument('--debug', action='store_true')
+    parser.add_argument('--save_episode', action='store_true')
 
     parser.add_argument('--num_nodes', default = 1, type = int, help = "The number of nodes.")
     

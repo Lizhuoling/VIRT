@@ -1,0 +1,11 @@
+__BASE__: "Base.yaml"
+
+TASK_NAME: 'sim_insertion_scripted'
+
+TRAIN:
+  LR_WARMUP: False
+  WARMUP_STEPS: 0
+  OPTIMIZER: 'adamw'
+  LR: 0.00001
+  LR_BACKBONE: 0.00001
+  DECAY_LR_ITER_STEPS: []

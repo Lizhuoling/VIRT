@@ -117,9 +117,9 @@ def get_norm_stats(dataset_dir, norm_keys):
                 norm_data_dict[norm_key].append(torch.from_numpy(root[norm_key][()]))
 
     for norm_key in norm_keys:
-        norm_data_dict[norm_key] = torch.stack(norm_data_dict[norm_key])
-        mean_std_dict[norm_key + '_mean'] = norm_data_dict[norm_key].mean(dim=[0, 1])
-        mean_std_dict[norm_key + '_std'] = norm_data_dict[norm_key].std(dim=[0, 1])
+        norm_data_dict[norm_key] = torch.cat(norm_data_dict[norm_key], axis = 0)
+        mean_std_dict[norm_key + '_mean'] = norm_data_dict[norm_key].mean(dim=0)
+        mean_std_dict[norm_key + '_std'] = norm_data_dict[norm_key].std(dim=0)
         mean_std_dict[norm_key + '_std'] = torch.clip(mean_std_dict[norm_key + '_std'], 1e-2, np.inf) # avoid the std to be too small.
 
     return mean_std_dict

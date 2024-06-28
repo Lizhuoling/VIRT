@@ -21,6 +21,7 @@ def make_scheduler(optimizer, cfg, last_epoch=-1):
        
     lr_scheduler = lr_sched.LambdaLR(optimizer, lr_lbmd, last_epoch=last_epoch)
 
+    lr_warmup_scheduler = None
     if cfg['TRAIN']['LR_WARMUP']:
         lr_warmup_scheduler = CosineWarmupLR(optimizer, T_max=cfg['TRAIN']['WARMUP_STEPS'], eta_min=cfg['TRAIN']['LR'] / 10)
 

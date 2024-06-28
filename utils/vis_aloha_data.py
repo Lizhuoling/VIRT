@@ -45,6 +45,6 @@ def vis_self_data(h5py_file, save_folder, start_frame, end_frame):
     print('Done')
 
 if __name__ == '__main__':
-    vis_aloha_sim_h5py(h5py_file = '/home/twilight/home/data/aloha/sim_transfer_cube_scripted/episode_0.hdf5', save_folder = '/home/twilight/home/data/aloha/sim_transfer_cube_scripted_vis')
+    vis_aloha_sim_h5py(h5py_file = '/home/twilight/home/data/aloha/sim_insertion_scripted/episode_0.hdf5', save_folder = '/home/twilight/home/data/aloha/vis')
     #h5py_file = '/home/twilight/home/data/own_data/episode_0.hdf5'
     #vis_self_data(h5py_file = h5py_file, save_folder = '/home/twilight/home/data/own_data/vis/episode_0', start_frame = 10, end_frame = 400)
