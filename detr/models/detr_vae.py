@@ -1,4 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 """
 DETR model and criterion classes.
 """
@@ -228,9 +227,7 @@ def build_encoder(cfg):
     return encoder
 
 
-def build(cfg):
-    state_dim = 14 # TODO hardcode
-
+def get_ACT_model(cfg):
     # From state
     # backbone = None # from state for now, no need for conv nets
     # From image
@@ -248,28 +245,6 @@ def build(cfg):
         state_dim=cfg['POLICY']['STATE_DIM'],
         chunk_size=cfg['POLICY']['CHUNK_SIZE'],
         camera_names=cfg['DATA']['CAMERA_NAMES'],
-    )
-
-    n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print("number of parameters: %.2fM" % (n_parameters/1e6,))
-
-    return model
-
-def build_cnnmlp(args):
-    state_dim = 14 # TODO hardcode
-
-    # From state
-    # backbone = None # from state for now, no need for conv nets
-    # From image
-    backbones = []
-    for _ in args.camera_names:
-        backbone = build_backbone(args)
-        backbones.append(backbone)
-
-    model = CNNMLP(
-        backbones,
-        state_dim=state_dim,
-        camera_names=args.camera_names,
     )
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)

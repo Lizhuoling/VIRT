@@ -14,9 +14,9 @@ from einops import rearrange
 
 from constants import DT
 from constants import PUPPET_GRIPPER_JOINT_OPEN
-from dataset import load_data # data functions
-from dataset import sample_box_pose, sample_insertion_pose # robot functions
-from dataset import compute_dict_mean, detach_dict # helper functions
+from utils.dataset_utils import load_data # data functions
+from utils.dataset_utils import sample_box_pose, sample_insertion_pose # robot functions
+from utils.dataset_utils import compute_dict_mean, detach_dict # helper functions
 from utils.utils import set_seed
 from utils.engine import launch
 from utils import comm
@@ -24,8 +24,8 @@ from utils.optimizer import make_optimizer, make_scheduler
 from utils.check_point import DetectronCheckpointer
 from utils.metric_logger import MetricLogger
 from utils.logger import setup_logger
-from utils.transforms import build_transforms
-from policy import ACTPolicy, CNNMLPPolicy
+from utils.models.ACT_policy import ACTPolicy
+from utils.models.IsaacGripper_ACTPolicy import IsaacGripper_ACTPolicy
 from visualize_episodes import save_videos
 from configs.utils import load_yaml_with_base
 
@@ -71,7 +71,7 @@ def main(args):
             print(f'{ckpt_name}: {success_rate=} {avg_return=}')
         exit()
     
-    train_dataloader, val_dataloader, stats, _ = load_data(cfg)
+    train_dataloader, val_dataloader, stats, = load_data(cfg)
     
     # save dataset stats
     if not os.path.isdir(cfg['CKPT_DIR']):
@@ -85,8 +85,8 @@ def main(args):
 def make_policy(policy_class, cfg):
     if policy_class == 'ACT':
         policy = ACTPolicy(cfg)
-    elif policy_class == 'CNNMLP':
-        policy = CNNMLPPolicy(cfg)
+    elif policy_class == 'IsaacGripper_ACT':
+        policy = IsaacGripper_ACTPolicy(cfg)
     else:
         raise NotImplementedError
     return policy
@@ -267,11 +267,18 @@ def eval_bc(cfg, ckpt_name, save_episode=True):
     return success_rate, avg_return
 
 
-def forward_pass(data, policy):
-    image_data, qpos_data, action_data, is_pad = data
-    image_data, qpos_data, action_data, is_pad = image_data.cuda(), qpos_data.cuda(), action_data.cuda(), is_pad.cuda()
-    return policy(qpos_data, image_data, action_data, is_pad)
+def forward_pass(data, policy, cfg):
+    if cfg['POLICY']['POLICY_NAME'] == 'ACT':
+        image_data, qpos_data, action_data, is_pad = data
+        image_data, qpos_data, action_data, is_pad = image_data.cuda(), qpos_data.cuda(), action_data.cuda(), is_pad.cuda()
+        return policy(qpos_data, image_data, action_data, is_pad)
+    elif cfg['POLICY']['POLICY_NAME'] == 'IsaacGripper_ACT':
+        image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad = data
+        image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad = image_data.cuda(), past_action.cuda(), action_data.cuda(), \
+            end_observation.cuda(), joint_observation.cuda(), observation_is_pad.cuda(), past_action_is_pad.cuda(), action_is_pad.cuda()
 
+        return policy(image = image_data, past_action = past_action, end_obs = end_observation, joint_obs = joint_observation, action = action_data, observation_is_pad = observation_is_pad, \
+                      past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad)
 
 def train_bc(train_dataloader, val_dataloader, cfg):
     logger = logging.getLogger("grasp")
@@ -306,7 +313,7 @@ def train_bc(train_dataloader, val_dataloader, cfg):
         # training
         policy.train()
         optimizer.zero_grad()
-        forward_dict = forward_pass(data, policy)
+        forward_dict = forward_pass(data, policy, cfg)
         # backward
         loss = forward_dict['loss']
         loss.backward()
@@ -353,7 +360,7 @@ def train_bc(train_dataloader, val_dataloader, cfg):
                     eval_total_iter_num = cfg['EVAL']['MAX_VAL_SAMPLE_NUM']
 
                 for eval_data, eval_iter_cnt in zip(val_dataloader, range(eval_total_iter_num)):
-                    forward_dict = forward_pass(data, policy)
+                    forward_dict = forward_pass(data, policy, cfg)
                     epoch_dicts.append(forward_dict)
                 epoch_summary = compute_dict_mean(epoch_dicts)
 

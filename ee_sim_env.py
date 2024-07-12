@@ -8,7 +8,7 @@ from constants import PUPPET_GRIPPER_POSITION_UNNORMALIZE_FN
 from constants import PUPPET_GRIPPER_POSITION_NORMALIZE_FN
 from constants import PUPPET_GRIPPER_VELOCITY_NORMALIZE_FN
 
-from dataset import sample_box_pose, sample_insertion_pose
+from utils.dataset_utils import sample_box_pose, sample_insertion_pose
 from dm_control import mujoco
 from dm_control.rl import control
 from dm_control.suite import base

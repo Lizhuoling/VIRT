@@ -8,7 +8,6 @@ CKPT_DIR: "./outputs/debug"
 DATASET_DIR: "./data/sim_transfer_cube_scripted"
 ONSCREEN_RENDER: False
 
-
 POLICY:
   POLICY_NAME: "ACT"
   BACKBONE: "resnet18"
@@ -53,3 +52,5 @@ DATA:
   NORM_KEYS: ['action', 'observations/qpos',]
   IMG_NORM_MEAN: [0.485, 0.456, 0.406]
   IMG_NORM_STD: [0.229, 0.224, 0.225]
+  PAST_OBSERVATION_LEN: 1
+  PAST_ACTION_LEN: 1
