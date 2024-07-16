@@ -16,15 +16,13 @@ class IsaacGripper_ACTPolicy(nn.Module):
         if self.cfg['POLICY']['USE_VAE']:
             self.kl_weight = cfg['POLICY']['KL_WEIGHT']
 
-    def __call__(self, image, past_action, end_obs, joint_obs, action=None, observation_is_pad = None, past_action_is_pad = None, action_is_pad = None):
+    def __call__(self, image, past_action, end_obs, joint_obs, action=None, observation_is_pad = None, past_action_is_pad = None, action_is_pad = None, task_instruction_list = None):
         env_state = None
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                         std=[0.229, 0.224, 0.225])
-        image = normalize(image)
         if action is not None: # training or validation time
             a_hat, is_pad_hat, (mu, logvar) = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, action = action, \
-                                                         observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad)
+                            observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list)
             loss_dict = dict()
+            
             all_l1 = F.l1_loss(action, a_hat, reduction='none')
             l1 = (all_l1 * ~action_is_pad.unsqueeze(-1)).mean()
             loss_dict['l1'] = l1
@@ -36,7 +34,9 @@ class IsaacGripper_ACTPolicy(nn.Module):
                 loss_dict['loss'] = l1
             return loss_dict
         else: # inference time
-            a_hat, _, (_, _) = self.model(qpos, image, env_state) # no action, sample from prior
+            a_hat, _, (_, _) = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, \
+                            observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, task_instruction_list = task_instruction_list)
+            
             return a_hat
 
 def kl_divergence(mu, logvar):

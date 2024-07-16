@@ -1,25 +1,35 @@
 __BASE__: "Base.yaml"
 
 TASK_NAME: 'isaac_gripper'
+ONSCREEN_RENDER: True
 
 POLICY:
   POLICY_NAME: "IsaacGripper_ACT"
   CHUNK_SIZE: 40
-  STATE_DIM: 7
+  STATE_DIM: 9
   ENC_LAYERS: 1
   DEC_LAYERS: 6
   USE_VAE: True
+  USE_CLIP: True
+  CLIP_PATH: "/home/cvte/twilight/home/data/ckpts/CLIP_ckpts"
 
 TRAIN:
-  NUM_ITERATIONS: 500000
-  BATCH_SIZE: 32
+  NUM_ITERATIONS: 300000
+  BATCH_SIZE: 64
+  LR: 0.00005
+  LR_BACKBONE: 0.00005
 
 EVAL:
   DATA_EVAL_RATIO: 0.01
+  INFERENCE_MAX_TIME: 60
+  TEST_ENVI_NUM: 100
+  TEST_ENVI_BATCH_NUM: 1
+  TEST_EXECUTION_INTERVAL: 0.05
 
 DATA:
   CAMERA_NAMES: ['exterior_camera1', 'exterior_camera2', 'top_camera', 'wrist_camera']
-  INPUT_KEYS: ['action', 'observations/end_observation', 'observations/joint_observation',]
+  INPUT_KEYS: ['action', 'observations/end_observation', 'observations/joint_observation', 'task_instruction']
   NORM_KEYS: ['action', 'observations/end_observation', 'observations/joint_observation']
   PAST_OBSERVATION_LEN: 20
   PAST_ACTION_LEN: 50
+  FRANKA_XYZ_RANGE: [0.2, 0.8, -0.5, 0.5, 0.4, 0.8] # [x_min, x_max, y_min, y_max, z_min, z_max]

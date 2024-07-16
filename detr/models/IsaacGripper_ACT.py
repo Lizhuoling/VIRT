@@ -6,6 +6,8 @@ import pdb
 import torch
 from torch import nn
 from torch.autograd import Variable
+from transformers import AutoTokenizer, CLIPTextModelWithProjection
+
 from .backbone import build_backbone
 from .transformer import build_transformer, TransformerEncoder, TransformerEncoderLayer
 
@@ -71,7 +73,7 @@ class IsaacGripperDETR(nn.Module):
         self.camera_view_pos_embed = nn.Embedding(len(camera_names), hidden_dim)
 
         # Proprioception information encoding.
-        self.past_action_mlp = nn.Linear(7, hidden_dim)  # Past action information encoding
+        self.past_action_mlp = nn.Linear(9, hidden_dim)  # Past action information encoding
         self.past_action_pos_emb = nn.Embedding(self.cfg['DATA']['PAST_ACTION_LEN'], hidden_dim)
         self.end_obs_mlp = nn.Linear(13, hidden_dim) # End observation information encoding
         self.joint_obs_mlp = nn.Linear(9, hidden_dim) # Joint observation information encoding
@@ -79,7 +81,12 @@ class IsaacGripperDETR(nn.Module):
         self.end_obs_pos_emb = nn.Embedding(1, hidden_dim)
         self.joint_obs_pos_emb = nn.Embedding(1, hidden_dim)
 
-    def forward(self, image, past_action, end_obs, joint_obs, env_state, action = None, observation_is_pad = None, past_action_is_pad = None, action_is_pad = None):
+        if self.cfg["POLICY"]["USE_CLIP"]:
+            self.clip_text_model = CLIPTextModelWithProjection.from_pretrained(cfg["POLICY"]["CLIP_PATH"])
+            self.clip_tokenizer = AutoTokenizer.from_pretrained(cfg["POLICY"]["CLIP_PATH"])
+            self.task_instruction_pos_emb = nn.Embedding(1, hidden_dim)
+
+    def forward(self, image, past_action, end_obs, joint_obs, env_state, action = None, observation_is_pad = None, past_action_is_pad = None, action_is_pad = None, task_instruction_list = None):
         """
         image: (batch, num_cam, channel, height, width)
         past_action: (batch, past_action_len, action_dim)
@@ -88,9 +95,16 @@ class IsaacGripperDETR(nn.Module):
         env_state: None
         action: (batch, chunk_size, action_dim)
         is_pad: (batch, chunk_size)
+        task_instruction_list: A list with the length of batch, each element is a string.
         """
         is_training = action is not None # train or val
         bs = image.shape[0]
+
+        if self.cfg["POLICY"]["USE_CLIP"]:
+            text_tokens = self.clip_tokenizer(task_instruction_list, padding=True, return_tensors="pt").to(image.device)
+            with torch.no_grad():
+                task_instruction_emb = self.clip_text_model(**text_tokens).text_embeds.detach()  # Left shape: (B, clip_text_len)
+
         ### Obtain latent z from action sequence
         if self.cfg['POLICY']['USE_VAE'] and is_training: # VAE encoder
             # project action sequence to embedding dim, and concat with a CLS token
@@ -150,15 +164,22 @@ class IsaacGripperDETR(nn.Module):
         end_obs_pos = self.obs_pos_emb.weight[:, None, :].expand(-1, bs, -1) + self.end_obs_pos_emb.weight[:, None, :]  # (past_obs_len, B, C)
         joint_obs_src = self.joint_obs_mlp(joint_obs).permute(1, 0, 2)    # (past_obs_len, B, C)
         joint_obs_pos = self.obs_pos_emb.weight[:, None, :].expand(-1, bs, -1) + self.joint_obs_pos_emb.weight[:, None, :]  # (past_obs_len, B, C)
-        
+
+        src = torch.cat((src, past_action_src, end_obs_src, joint_obs_src), dim = 0)  # Left shape: (L, B, C)
+        pos = torch.cat((pos, past_action_pos, end_obs_pos, joint_obs_pos), dim = 0)  # Left shape: (L, B, C)
+        mask = torch.cat((mask, past_action_is_pad, observation_is_pad, observation_is_pad), dim = 1) # Left shape: (B, L)
         if self.cfg['POLICY']['USE_VAE']:
-            src = torch.cat((src, past_action_src, end_obs_src, joint_obs_src, latent_input), dim = 0)  # Left shape: (L, B, C)
-            pos = torch.cat((pos, past_action_pos, end_obs_pos, joint_obs_pos, vae_pos), dim = 0)  # Left shape: (L, B, C)
-            mask = torch.cat((mask, past_action_is_pad, observation_is_pad, observation_is_pad, vae_mask), dim = 1) # Left shape: (B, L)
-        else:
-            src = torch.cat((src, past_action_src, end_obs_src, joint_obs_src), dim = 0)  # Left shape: (L, B, C)
-            pos = torch.cat((pos, past_action_pos, end_obs_pos, joint_obs_pos), dim = 0)  # Left shape: (L, B, C)
-            mask = torch.cat((mask, past_action_is_pad, observation_is_pad, observation_is_pad), dim = 1) # Left shape: (B, L)
+            src = torch.cat((src, latent_input), dim = 0)  # Left shape: (L, B, C)
+            pos = torch.cat((pos, vae_pos), dim = 0)  # Left shape: (L, B, C)
+            mask = torch.cat((mask, vae_mask), dim = 1) # Left shape: (B, L)
+        if self.cfg["POLICY"]["USE_CLIP"]:
+            task_instruction_src = task_instruction_emb[None]   # Left shape: (1, B, C)
+            task_instruction_pos = self.task_instruction_pos_emb.weight[:, None, :].expand(-1, bs, -1)   # Left shape: (1, B, C)
+            task_instruction_mask = torch.zeros((bs, task_instruction_pos.shape[0]), dtype=torch.bool).to(image.device) # Left shape: (B, 1)
+            src = torch.cat((src, task_instruction_src), dim = 0)  # Left shape: (L, B, C)
+            pos = torch.cat((pos, task_instruction_pos), dim = 0)  # Left shape: (L, B, C)
+            mask = torch.cat((mask, task_instruction_mask), dim = 1) # Left shape: (B, L)
+    
         query_emb = self.query_embed.weight.unsqueeze(1).repeat(1, bs, 1)   # Left shape: (num_query, B, C)
         hs = self.transformer(src, mask, query_emb, pos)[0] # Left shape: (B, num_query, C)
 
