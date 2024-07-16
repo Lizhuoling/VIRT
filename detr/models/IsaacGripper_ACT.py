@@ -73,13 +73,17 @@ class IsaacGripperDETR(nn.Module):
         self.camera_view_pos_embed = nn.Embedding(len(camera_names), hidden_dim)
 
         # Proprioception information encoding.
-        self.past_action_mlp = nn.Linear(9, hidden_dim)  # Past action information encoding
-        self.past_action_pos_emb = nn.Embedding(self.cfg['DATA']['PAST_ACTION_LEN'], hidden_dim)
-        self.end_obs_mlp = nn.Linear(13, hidden_dim) # End observation information encoding
-        self.joint_obs_mlp = nn.Linear(9, hidden_dim) # Joint observation information encoding
-        self.obs_pos_emb = nn.Embedding(self.cfg['DATA']['PAST_OBSERVATION_LEN'], hidden_dim)
-        self.end_obs_pos_emb = nn.Embedding(1, hidden_dim)
-        self.joint_obs_pos_emb = nn.Embedding(1, hidden_dim)
+        if 'past_action' in self.cfg['DATA']['INPUT_KEYS']:
+            self.past_action_mlp = nn.Linear(9, hidden_dim)  # Past action information encoding
+            self.past_action_pos_emb = nn.Embedding(self.cfg['DATA']['PAST_ACTION_LEN'], hidden_dim)
+        if 'observations/end_observation' in self.cfg['DATA']['INPUT_KEYS'] or 'observations/joint_observation' in self.cfg['DATA']['INPUT_KEYS']:
+            self.obs_pos_emb = nn.Embedding(self.cfg['DATA']['PAST_OBSERVATION_LEN'], hidden_dim)
+            if 'observations/end_observation' in self.cfg['DATA']['INPUT_KEYS']:
+                self.end_obs_mlp = nn.Linear(13, hidden_dim) # End observation information encoding
+                self.end_obs_pos_emb = nn.Embedding(1, hidden_dim)
+            if 'observations/joint_observation' in self.cfg['DATA']['INPUT_KEYS']:
+                self.joint_obs_pos_emb = nn.Embedding(1, hidden_dim)
+                self.joint_obs_mlp = nn.Linear(9, hidden_dim) # Joint observation information encoding
 
         if self.cfg["POLICY"]["USE_CLIP"]:
             self.clip_text_model = CLIPTextModelWithProjection.from_pretrained(cfg["POLICY"]["CLIP_PATH"])
@@ -158,16 +162,25 @@ class IsaacGripperDETR(nn.Module):
         mask = torch.zeros((bs, src.shape[0]), dtype=torch.bool).to(image.device)   # Left shape: (B, NHW)
 
         # proprioception features
-        past_action_src = self.past_action_mlp(past_action).permute(1, 0, 2)   # (past_action_len, B, C)
-        past_action_pos = self.past_action_pos_emb.weight[:, None, :].expand(-1, bs, -1)  # (past_action_len, B, C)
-        end_obs_src = self.end_obs_mlp(end_obs).permute(1, 0, 2)    # (past_obs_len, B, C)
-        end_obs_pos = self.obs_pos_emb.weight[:, None, :].expand(-1, bs, -1) + self.end_obs_pos_emb.weight[:, None, :]  # (past_obs_len, B, C)
-        joint_obs_src = self.joint_obs_mlp(joint_obs).permute(1, 0, 2)    # (past_obs_len, B, C)
-        joint_obs_pos = self.obs_pos_emb.weight[:, None, :].expand(-1, bs, -1) + self.joint_obs_pos_emb.weight[:, None, :]  # (past_obs_len, B, C)
+        if 'past_action' in self.cfg['DATA']['INPUT_KEYS']:
+            past_action_src = self.past_action_mlp(past_action).permute(1, 0, 2)   # (past_action_len, B, C)
+            past_action_pos = self.past_action_pos_emb.weight[:, None, :].expand(-1, bs, -1)  # (past_action_len, B, C)
+            src = torch.cat((src, past_action_src), dim = 0)  # Left shape: (L, B, C)
+            pos = torch.cat((pos, past_action_pos), dim = 0)  # Left shape: (L, B, C)
+            mask = torch.cat((mask, past_action_is_pad), dim = 1) # Left shape: (B, L)
+        if 'observations/end_observation' in self.cfg['DATA']['INPUT_KEYS']:
+            end_obs_src = self.end_obs_mlp(end_obs).permute(1, 0, 2)    # (past_obs_len, B, C)
+            end_obs_pos = self.obs_pos_emb.weight[:, None, :].expand(-1, bs, -1) + self.end_obs_pos_emb.weight[:, None, :]  # (past_obs_len, B, C)
+            src = torch.cat((src, end_obs_src), dim = 0)  # Left shape: (L, B, C)
+            pos = torch.cat((pos, end_obs_pos), dim = 0)  # Left shape: (L, B, C)
+            mask = torch.cat((mask, observation_is_pad), dim = 1) # Left shape: (B, L)
+        if 'observations/joint_observation' in self.cfg['DATA']['INPUT_KEYS']:
+            joint_obs_src = self.joint_obs_mlp(joint_obs).permute(1, 0, 2)    # (past_obs_len, B, C)
+            joint_obs_pos = self.obs_pos_emb.weight[:, None, :].expand(-1, bs, -1) + self.joint_obs_pos_emb.weight[:, None, :]  # (past_obs_len, B, C)
+            src = torch.cat((src, joint_obs_src), dim = 0)  # Left shape: (L, B, C)
+            pos = torch.cat((pos, joint_obs_pos), dim = 0)  # Left shape: (L, B, C)
+            mask = torch.cat((mask, observation_is_pad), dim = 1) # Left shape: (B, L)
 
-        src = torch.cat((src, past_action_src, end_obs_src, joint_obs_src), dim = 0)  # Left shape: (L, B, C)
-        pos = torch.cat((pos, past_action_pos, end_obs_pos, joint_obs_pos), dim = 0)  # Left shape: (L, B, C)
-        mask = torch.cat((mask, past_action_is_pad, observation_is_pad, observation_is_pad), dim = 1) # Left shape: (B, L)
         if self.cfg['POLICY']['USE_VAE']:
             src = torch.cat((src, latent_input), dim = 0)  # Left shape: (L, B, C)
             pos = torch.cat((pos, vae_pos), dim = 0)  # Left shape: (L, B, C)

@@ -33,6 +33,7 @@ from utils.models.ACT_policy import ACTPolicy
 from utils.models.IsaacGripper_ACTPolicy import IsaacGripper_ACTPolicy
 from visualize_episodes import save_videos
 from configs.utils import load_yaml_with_base
+from torch.utils.tensorboard import SummaryWriter
 
 from sim_env import BOX_POSE
 
@@ -178,6 +179,8 @@ def train_bc(train_dataloader, val_dataloader, cfg):
     scheduler, warmup_scheduler = make_scheduler(optimizer, cfg=cfg)
     
     main_thread = comm.get_rank() == 0
+    if main_thread:
+        tb_writer = SummaryWriter(os.path.join(ckpt_dir, 'tb/{}/'.format(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))))
 
     if cfg['TRAIN']['LR_WARMUP']:
         assert warmup_scheduler is not None
@@ -232,6 +235,9 @@ def train_bc(train_dataloader, val_dataloader, cfg):
                 )
             )
 
+            tb_writer.add_scalar('loss/total_loss', loss.item(), iter_cnt)
+            tb_writer.add_scalar('state/lr', optimizer.param_groups[0]["lr"], iter_cnt)
+
         # validation
         if main_thread and iter_cnt % cfg['EVAL']['EVAL_INTERVAL'] == 0 and iter_cnt != 0:
             logger.info("Start evaluation at iteration {}...".format(iter_cnt))
@@ -261,7 +267,7 @@ def train_bc(train_dataloader, val_dataloader, cfg):
         if main_thread and iter_cnt % cfg['TRAIN']['SAVE_CHECKPOINT_INTERVAL'] == 0 and iter_cnt != 0:
             ckpt_path = os.path.join(ckpt_dir, f'policy_iter{iter_cnt}.ckpt')
             save_model(policy, ckpt_path)
-
+            
     if main_thread:
         ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')
         save_model(policy, ckpt_path)
@@ -269,6 +275,9 @@ def train_bc(train_dataloader, val_dataloader, cfg):
         logger.info(f'Training finished:\nSeed {seed}, val loss {min_val_loss:.6f} at iteration {best_iter}')
 
     comm.synchronize()
+    tb_writer.close()
+    for handler in logging.root.handlers:
+        handler.close()
 
 def save_model(model, save_path):
     model = model.cpu()

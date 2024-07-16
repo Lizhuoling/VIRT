@@ -14,7 +14,8 @@ POLICY:
   CLIP_PATH: "/home/cvte/twilight/home/data/ckpts/CLIP_ckpts"
 
 TRAIN:
-  NUM_ITERATIONS: 300000
+  NUM_ITERATIONS: 100000
+  SAVE_CHECKPOINT_INTERVAL: 20000
   BATCH_SIZE: 64
   LR: 0.00005
   LR_BACKBONE: 0.00005
@@ -23,13 +24,15 @@ EVAL:
   DATA_EVAL_RATIO: 0.01
   INFERENCE_MAX_TIME: 60
   TEST_ENVI_NUM: 100
-  TEST_ENVI_BATCH_NUM: 1
+  TEST_ENVI_BATCH_NUM: 5
   TEST_EXECUTION_INTERVAL: 0.05
 
 DATA:
   CAMERA_NAMES: ['exterior_camera1', 'exterior_camera2', 'top_camera', 'wrist_camera']
-  INPUT_KEYS: ['action', 'observations/end_observation', 'observations/joint_observation', 'task_instruction']
+  INPUT_KEYS: ['observations/end_observation', 'task_instruction'] # 'past_action', 'observations/joint_observation'
   NORM_KEYS: ['action', 'observations/end_observation', 'observations/joint_observation']
-  PAST_OBSERVATION_LEN: 20
-  PAST_ACTION_LEN: 50
+  PAST_OBSERVATION_LEN: 1
+  OBSERVATION_SAMPLE_INTERVAL: 10
+  PAST_ACTION_LEN: 0
+  PAST_ACTION_SAMPLE_INTERVAL: 10
   FRANKA_XYZ_RANGE: [0.2, 0.8, -0.5, 0.5, 0.4, 0.8] # [x_min, x_max, y_min, y_max, z_min, z_max]

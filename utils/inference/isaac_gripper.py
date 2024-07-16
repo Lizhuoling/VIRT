@@ -35,10 +35,11 @@ class IsaacGripperTestEnviManager():
                     isaac_envi.update_simulator_before_ctrl()
 
                     if actions_pred == None or execution_step >= actions_pred.shape[1]:
-                        end_observation, joint_observation, all_cam_images = self.get_observation(isaac_envi)
-                        enb_obs_list.append(end_observation)
-                        joint_obs_list.append(joint_observation)
-                        if len(action_list) == 0: action_list.append(joint_observation) # Initialize the first element with joint observation
+                        if len(action_list) == 0:
+                            end_observation, joint_observation, all_cam_images = self.get_observation(isaac_envi)
+                            enb_obs_list.append(end_observation)
+                            joint_obs_list.append(joint_observation)
+                            action_list.append(torch.cat((end_observation[:, 0:7], joint_observation[:, 7:9]), dim = 1)) # Initialize the first element with joint observation
                         all_cam_images, past_action, end_obs, joint_obs, past_action_is_pad, observation_is_pad, task_instruction = self.prepare_policy_input(enb_obs_list, \
                                                                                 joint_obs_list, action_list, all_cam_images, isaac_envi.task_instruction)
                         actions_pred = self.policy(image = all_cam_images, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, observation_is_pad = observation_is_pad, \
@@ -49,6 +50,12 @@ class IsaacGripperTestEnviManager():
                         
                     cur_time = time.time()
                     if cur_time - last_time >= self.cfg['EVAL']['TEST_EXECUTION_INTERVAL']:
+                        # Save observation data
+                        end_observation, joint_observation, all_cam_images = self.get_observation(isaac_envi)
+                        enb_obs_list.append(end_observation)
+                        joint_obs_list.append(joint_observation)
+                        action_list.append(actions_pred[:, execution_step])
+                        # Execute an action
                         action = actions_pred[:, execution_step]
                         self.execute_action(action, isaac_envi)
                         isaac_envi.update_action_map()

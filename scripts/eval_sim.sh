@@ -12,7 +12,7 @@ CUDA_VISIBLE_DEVICES=0 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_nod
     --config_name $config_name \
     --ckpt_dir ./outputs/$exp_id \
     --data_dir ./datasets/isaac_gripper \
-    --load_dir policy_iter150000.ckpt \
+    --load_dir policy_iter1.ckpt \
     --num_nodes $nnodes \
     --eval \
     #--save_episode \

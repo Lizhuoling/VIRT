@@ -13,4 +13,4 @@ CUDA_VISIBLE_DEVICES=0 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_nod
     --ckpt_dir ./outputs/$exp_id \
     --data_dir ./datasets/isaac_gripper \
     --num_nodes $nnodes \
-    --debug \
+    #--debug \
