@@ -42,11 +42,11 @@ e = IPython.embed
 
 def main(args):
     # Initialize logger
-    if not os.path.exists(args.ckpt_dir):
-        os.makedirs(args.ckpt_dir)
+    if not os.path.exists(args.save_dir):
+        os.makedirs(args.save_dir)
     exp_start_time = datetime.datetime.strftime(datetime.datetime.now(), '%m-%d %H:%M:%S')
     rank = comm.get_rank()
-    logger = setup_logger(args.ckpt_dir, rank, file_name="log_{}.txt".format(exp_start_time))
+    logger = setup_logger(args.save_dir, rank, file_name="log_{}.txt".format(exp_start_time))
     if comm.is_main_process():
         logger.info("Using {} GPUs".format(comm.get_world_size()))
         logger.info("Collecting environment info")
@@ -56,7 +56,7 @@ def main(args):
     # Initialize cfg
     cfg = load_yaml_with_base(os.path.join('configs', args.config_name+'.yaml'))
     cfg['IS_EVAL'] = args.eval
-    cfg['CKPT_DIR'] = args.ckpt_dir
+    cfg['CKPT_DIR'] = args.save_dir
     cfg['DATASET_DIR'] = args.data_dir
     cfg['ONSCREEN_RENDER'] = args.onscreen_render
     cfg['IS_DEBUG'] = args.debug
@@ -67,11 +67,11 @@ def main(args):
         set_seed(cfg['SEED'])
 
     if cfg['IS_EVAL']:
-        ckpt_names = [args.load_dir]
+        ckpt_paths = [args.load_dir]
         results = []
-        for ckpt_name in ckpt_names:
-            success_rate, avg_return = eval_bc(cfg, ckpt_name, save_episode=args.save_episode)
-            results.append([ckpt_name, success_rate, avg_return])
+        for ckpt_path in ckpt_paths:
+            success_rate, avg_return = eval_bc(cfg, ckpt_path, save_episode=args.save_episode)
+            results.append([ckpt_path.split('/')[-1], success_rate, avg_return])
 
         for ckpt_name, success_rate, avg_return in results:
             print(f'{ckpt_name}: {success_rate=} {avg_return=}')
@@ -86,7 +86,7 @@ def main(args):
     with open(stats_path, 'wb') as f:
         pickle.dump(stats, f)
 
-    train_bc(train_dataloader, val_dataloader, cfg)
+    train_bc(train_dataloader, val_dataloader, cfg, load_dir = args.load_dir)
 
 def make_policy(policy_class, cfg):
     if policy_class == 'ACT':
@@ -95,6 +95,7 @@ def make_policy(policy_class, cfg):
         policy = IsaacGripper_ACTPolicy(cfg)
     else:
         raise NotImplementedError
+
     return policy
 
 def inference_get_images(ts, camera_names, inference_transforms):
@@ -108,8 +109,9 @@ def inference_get_images(ts, camera_names, inference_transforms):
     return curr_image.cuda().unsqueeze(0)
 
 
-def eval_bc(cfg, ckpt_name, save_episode=True):
+def eval_bc(cfg, ckpt_path, save_episode=True):
     ckpt_dir = cfg['CKPT_DIR']
+    ckpt_name = ckpt_path.split('/')[-1]
     state_dim = cfg['POLICY']['STATE_DIM']
     real_robot = cfg['EVAL']['REAL_ROBOT']
     policy_class = cfg['POLICY']['POLICY_NAME']
@@ -121,7 +123,6 @@ def eval_bc(cfg, ckpt_name, save_episode=True):
     onscreen_cam = 'angle'
     
     # load policy and stats
-    ckpt_path = os.path.join(ckpt_dir, ckpt_name)
     policy = make_policy(policy_class, cfg)
     loading_status = policy.load_state_dict(torch.load(ckpt_path), strict = False)
     print(loading_status)
@@ -165,7 +166,7 @@ def forward_pass(data, policy, cfg):
         return policy(image = image_data, past_action = past_action, end_obs = end_observation, joint_obs = joint_observation, action = action_data, observation_is_pad = observation_is_pad, \
                       past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list)
 
-def train_bc(train_dataloader, val_dataloader, cfg):
+def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
     logger = logging.getLogger("grasp")
 
     num_iterations = cfg['TRAIN']['NUM_ITERATIONS']
@@ -174,6 +175,11 @@ def train_bc(train_dataloader, val_dataloader, cfg):
     policy_class = cfg['POLICY']['POLICY_NAME']
 
     policy = make_policy(policy_class, cfg)
+    if load_dir != '':
+        loading_status = policy.load_state_dict(torch.load(load_dir), strict = False)
+        start_iter = int(load_dir.split('/')[-1][11:-5]) + 1
+    else:
+        start_iter = 0
     policy.cuda()
     optimizer = make_optimizer(policy, cfg)
     scheduler, warmup_scheduler = make_scheduler(optimizer, cfg=cfg)
@@ -194,7 +200,7 @@ def train_bc(train_dataloader, val_dataloader, cfg):
     end = time.time()
     train_meters = MetricLogger(delimiter=", ", )
 
-    for data, iter_cnt in zip(train_dataloader, range(num_iterations)):
+    for data, iter_cnt in zip(train_dataloader, range(start_iter, num_iterations)):
         data_time = time.time() - end
 
         # training
@@ -280,18 +286,17 @@ def train_bc(train_dataloader, val_dataloader, cfg):
         handler.close()
 
 def save_model(model, save_path):
-    model = model.cpu()
-    del model.model.clip_text_model
     model_ckpt = model.state_dict()
     torch.save(model_ckpt, save_path)
+    print('Save model done!')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_name', action='store', type=str, help='configuration file name', required=True)
     parser.add_argument('--onscreen_render', action='store_true')
     parser.add_argument('--eval', action='store_true')
-    parser.add_argument('--ckpt_dir', action='store', type=str, help='saving directory', required=True)
-    parser.add_argument('--load_dir', action='store', type=str, default = 'policy_last.ckpt', help='saving directory',)
+    parser.add_argument('--save_dir', action='store', type=str, help='saving directory', required=True)
+    parser.add_argument('--load_dir', action='store', type=str, default = '', help='The path to weight',)
     parser.add_argument('--data_dir', action='store', type=str, help='dataset folder path', required=True)
     parser.add_argument('--real_robot', action='store_true')
     parser.add_argument('--debug', action='store_true')

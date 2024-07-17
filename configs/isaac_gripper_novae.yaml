@@ -9,7 +9,7 @@ POLICY:
   STATE_DIM: 9
   ENC_LAYERS: 1
   DEC_LAYERS: 6
-  USE_VAE: True
+  USE_VAE: False
   USE_CLIP: True
   CLIP_PATH: "/home/cvte/twilight/home/data/ckpts/CLIP_ckpts"
 

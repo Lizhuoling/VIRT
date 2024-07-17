@@ -1,5 +1,5 @@
 exp_id=debug
-config_name=isaac_gripper_vae
+config_name=isaac_gripper_novae
 
 nnodes=1
 nproc_per_node=1
@@ -10,9 +10,9 @@ master_port=29513
 CUDA_VISIBLE_DEVICES=0 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_node --node_rank=$node_rank --master_addr=$master_addr --master_port $master_port \
     imitate_episodes.py \
     --config_name $config_name \
-    --ckpt_dir ./outputs/$exp_id \
+    --save_dir ./outputs/$exp_id \
     --data_dir ./datasets/isaac_gripper \
-    --load_dir policy_iter1.ckpt \
+    --load_dir outputs/isaac_gripper_novae/policy_iter20000.ckpt \
     --num_nodes $nnodes \
     --eval \
     #--save_episode \

@@ -119,10 +119,10 @@ class IsaacGripperDETR(nn.Module):
             encoder_input = encoder_input.permute(1, 0, 2) # (seq+1, bs, hidden_dim)
             # do not mask cls token
             cls_joint_is_pad = torch.full((bs, 1), False).to(image.device) # False: not a padding
-            vae_is_pad = torch.cat([cls_joint_is_pad, action_is_pad], axis=1)  # (bs, seq+1)
+            vae_is_pad = torch.cat([cls_joint_is_pad, action_is_pad], axis=1)  # (bs, 1+seq)
             # obtain position embedding
             pos_embed = self.vae_pos_table.clone().detach()
-            pos_embed = pos_embed.permute(1, 0, 2)  # (seq+1, 1, hidden_dim)
+            pos_embed = pos_embed.permute(1, 0, 2)  # (1+seq, 1, hidden_dim)
             # query model
             encoder_output = self.encoder(encoder_input, pos=pos_embed, src_key_padding_mask=vae_is_pad)
             encoder_output = encoder_output[0] # take cls output only
@@ -131,14 +131,12 @@ class IsaacGripperDETR(nn.Module):
             logvar = latent_info[:, self.latent_dim:]   # Left shape: (B, latent_dim)
             latent_sample = reparametrize(mu, logvar)
             latent_input = self.latent_out_proj(latent_sample)[None]  # Left shape: (B, hidden_dim)
-
             vae_pos = self.vae_pos_embed.weight[:, None, :].expand(-1, bs, -1)  # Left shape: (1, B, C)
             vae_mask = torch.zeros((bs, 1), dtype=torch.bool).to(image.device)  # Left shape: (B, 1)
         elif self.cfg['POLICY']['USE_VAE'] and not is_training:
             mu = logvar = None
             latent_sample = torch.zeros([bs, self.latent_dim], dtype=torch.float32).to(image.device)
             latent_input = self.latent_out_proj(latent_sample)[None]    # Left shape: (1, B, C)
-
             vae_pos = self.vae_pos_embed.weight[:, None, :].expand(-1, bs, -1)  # Left shape: (1, B, C)
             vae_mask = torch.zeros((bs, 1), dtype=torch.bool).to(image.device)  # Left shape: (B, 1)
         else:
