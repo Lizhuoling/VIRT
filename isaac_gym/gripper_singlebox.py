@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 from itertools import combinations
 import argparse
 
-class GripperHand():
+class GripperSingleBox():
     def __init__(self, num_envs = 1, seed = None):
         self.num_envs = num_envs
 
@@ -243,7 +243,7 @@ class GripperHand():
                                             container_bottom_pose.p.z + container_right_pose_offset.z)
 
         boxes_pose = []
-        box_num = 5
+        box_num = 1
         for i in range(box_num):
             boxes_pose.append(gymapi.Transform())
 
@@ -256,7 +256,7 @@ class GripperHand():
         plane_params = gymapi.PlaneParams()
         plane_params.normal = gymapi.Vec3(0, 0, 1)
         self.gym.add_ground(self.sim, plane_params)
-
+        
         for i in range(num_envs):
             # create env
             env = self.gym.create_env(self.sim, env_lower, env_upper, num_per_row)
@@ -275,27 +275,18 @@ class GripperHand():
                 self.gym.set_rigid_body_color(env, container_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, gymapi.Vec3(np.array(0), np.array(0.6), np.array(0)))
 
             # add box
-            rerange_flag = True
-            while rerange_flag:
-                stack_groups = []
-                for cnt, box_pose in enumerate(boxes_pose):
-                    box_pose.p.x = table_pose.p.x + np.random.uniform(-0.15, 0.05)
-                    box_pose.p.y = table_pose.p.y + np.random.uniform(0.05, 0.3)
-                    box_pose.p.z = table_dims.z + 0.5 * box_size
-                    stack_groups.append([[box_pose, cnt]])
-                rerange_flag = False
-                for p1, p2, in combinations(boxes_pose, 2):
-                    if (np.sum(np.square(np.array([p1.p.x - p2.p.x, p1.p.y - p2.p.y]))) < 2 * (box_size + 0.013) ** 2):
-                        rerange_flag = True
-                        break
+            stack_groups = []
+            for cnt, box_pose in enumerate(boxes_pose):
+                box_pose.p.x = table_pose.p.x + np.random.uniform(-0.15, 0.05)
+                box_pose.p.y = table_pose.p.y + np.random.uniform(0.05, 0.3)
+                box_pose.p.z = table_dims.z + 0.5 * box_size
+                stack_groups.append([[box_pose, cnt]])
+            
             box_handles = [self.gym.create_actor(env, box_asset, box_pose, "box{}".format(box_cnt), i, 0) for box_cnt, box_pose in enumerate(boxes_pose)]
             box_colors = {
                 'red': gymapi.Vec3(1, 0, 0),
-                'green': gymapi.Vec3(0, 1, 0),
-                'blue': gymapi.Vec3(0, 0, 1),
-                'yellow': gymapi.Vec3(1, 1, 0),
-                'purple': gymapi.Vec3(1, 0, 1),
             }
+            
             assert len(box_handles) == len(box_colors)
             env_box_idxs_dict = {}
             for box_color, box_handle in zip(box_colors, box_handles):
@@ -321,10 +312,7 @@ class GripperHand():
             self.hand_idxs.append(hand_idx)
 
             # Generate language instruction.
-            self.box_sample_ids = random.sample(range(0, box_num), 2)
-            box_color_list = list(box_colors.keys())
-            self.task_instruction.append("Please place the {} box in the container and put the {} box on the {} box."\
-                .format(box_color_list[self.box_sample_ids[0]], box_color_list[self.box_sample_ids[1]], box_color_list[self.box_sample_ids[0]]))
+            self.task_instruction.append("Please place the red box in the container.")
 
         # point camera at middle env
         cam_pos = gymapi.Vec3(4, 3, 2)
@@ -364,7 +352,7 @@ class GripperHand():
             self.gym.attach_camera_to_body(hand_camera, env, finger_handle, local_transform, gymapi.FOLLOW_TRANSFORM)
 
             self.cameras.append(dict(top_camera = top_camera, side_camera1 = side_camera1, side_camera2 = side_camera2, hand_camera = hand_camera))
-
+        
         # ==== prepare tensors =====
         # from now on, we will use the tensor API that can run on CPU or GPU
         self.gym.prepare_sim(self.sim)
@@ -450,7 +438,7 @@ class GripperHand():
 
         self.gym.end_access_image_tensors(self.sim)
         return images_envs
-    
+
     def quat_axis(self, q, axis=0):
         basis_vec = torch.zeros(q.shape[0], 3, device=q.device)
         basis_vec[:, axis] = 1
@@ -475,4 +463,4 @@ class GripperHand():
         cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    envi = GripperHand()
+    envi = GripperSingleBox()

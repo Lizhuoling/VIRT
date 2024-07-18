@@ -20,9 +20,11 @@ from pyquaternion import Quaternion
 import matplotlib.pyplot as plt
 from itertools import combinations
 
-from gripper_hand import hand_imitate
+from gripper_hand import GripperHand
+from gripper_singlebox import GripperSingleBox
+from gripper_fixedboxes import GripperFixedBoxes
 
-def replay(root_path, start_idx = None):
+def replay(task_name, root_path, start_idx = None):
     file_name_list = sorted(os.listdir(root_path))
     file_name_list = [ele for ele in file_name_list if ele.endswith('.hdf5')]
     if start_idx != None:
@@ -37,23 +39,37 @@ def replay(root_path, start_idx = None):
 
     for file_name in file_name_list:
         h5py_path = os.path.join(root_path, file_name)
-        reward = replay_onecase(h5py_path)
-        if reward < 3:
-            result = 'failure'
-            failure_list.append(file_name)
-        else:
-            result = 'success'
+        reward = replay_onecase(task_name, h5py_path)
+
+        if task_name in ['isaac_gripper', 'isaac_fixedboxes']:
+            if reward < 3:
+                result = 'failure'
+                failure_list.append(file_name)
+            else:
+                result = 'success'
+        elif task_name == 'isaac_singlebox':
+            if reward < 1:
+                result = 'failure'
+                failure_list.append(file_name)
+            else:
+                result = 'success'
         print(f'{file_name} reward: {reward}, result: {result}')
+
     print(f"Failure list: {failure_list}")
 
 
-def replay_onecase(h5py_path):
+def replay_onecase(task_name, h5py_path):
     h5f = h5py.File(h5py_path, 'r')
     seed = np.array(h5f['seed']).item()
     actions = h5f['action'][:]  # Left shape: (T, 9)
     h5f.close()
 
-    isaac_env = hand_imitate(num_envs = 1, seed = seed)
+    if task_name == 'isaac_gripper':
+        isaac_env = GripperHand(num_envs = 1, seed = seed)
+    elif task_name == 'isaac_singlebox':
+        isaac_env = GripperSingleBox(num_envs = 1, seed = seed)
+    elif task_name == 'isaac_fixedboxes':
+        isaac_env = GripperFixedBoxes(num_envs = 1, seed = seed)
 
     last_time = time.time()
     ctrl_min_time = 0.05
@@ -76,7 +92,12 @@ def replay_onecase(h5py_path):
             action_idx += 1
         isaac_env.update_simulator_after_ctrl()
 
-    reward = get_reward(isaac_env)
+    if task_name == 'isaac_gripper':
+        reward = get_issac_gripper_reward(isaac_env)
+    elif task_name == 'isaac_singlebox':
+        reward = get_isaac_singlebox_reward(isaac_env)
+    elif task_name == 'isaac_fixedboxes':
+        reward = get_isaac_fixedboxes_reward(isaac_env)
     isaac_env.clean_up()
 
     return reward
@@ -101,7 +122,7 @@ def update_pos_action(isaac_env, action):
     isaac_env.pos_action[:, :7] = arm_ctrl
     isaac_env.pos_action[:, 7:] = goal_gripper
 
-def get_reward(isaac_env):
+def get_issac_gripper_reward(isaac_env):
     assert isaac_env.num_envs == 1
 
     task_instruction = isaac_env.task_instruction[0]
@@ -127,7 +148,38 @@ def get_reward(isaac_env):
     
     return reward
 
-if __name__ == '__main__':
-    #replay(root_path = '/home/cvte/twilight/home/data/own_data/isaac_gripper/h5py', start_idx = 81)
+def get_isaac_singlebox_reward(isaac_env):
+    box_idx = isaac_env.box_idxs[0]['red']
+    box_xyz = isaac_env.rb_states[box_idx, :3]
+    
+    if box_xyz[0] > 0.39 and box_xyz[0] < 0.61 and box_xyz[1] > -0.26 and box_xyz[1] < -0.14:
+        return 1
+    else:
+        return 0
+    
+def get_isaac_fixedboxes_reward(isaac_env):
+    box1_key, box2_key = 'blue', 'red'
 
-    print(replay_onecase('/home/cvte/twilight/home/data/own_data/isaac_gripper/h5py/episode_94.hdf5'))
+    box1_idx = isaac_env.box_idxs[0][box1_key]
+    box2_idx = isaac_env.box_idxs[0][box2_key]
+    box1_xyz = isaac_env.rb_states[box1_idx, :3]
+    box2_xyz = isaac_env.rb_states[box2_idx, :3]
+
+    reward = 0
+    if box1_xyz[0] > 0.39 and box1_xyz[0] < 0.61 and box1_xyz[1] > -0.26 and box1_xyz[1] < -0.14:
+        reward += 1
+    else:
+        return reward
+    
+    if box2_xyz[0] > 0.39 and box2_xyz[0] < 0.61 and box2_xyz[1] > -0.26 and box2_xyz[1] < -0.14:
+        reward += 1
+
+    if torch.norm(box1_xyz[0:2] - box2_xyz[0:2])  < 0.032 and box2_xyz[2] - box1_xyz[2] > 0.022:
+        reward += 1
+    
+    return reward
+
+if __name__ == '__main__':
+    replay(task_name = 'isaac_fixedboxes', root_path = '/home/cvte/twilight/data/isaac_fixedboxes/h5py', start_idx = 18)
+
+    #print(replay_onecase(task_name = 'isaac_fixedboxes', h5py_path = '/home/cvte/twilight/data/isaac_fixedboxes/h5py/episode_15.hdf5'))

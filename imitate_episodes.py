@@ -67,7 +67,10 @@ def main(args):
         set_seed(cfg['SEED'])
 
     if cfg['IS_EVAL']:
-        ckpt_paths = [args.load_dir]
+        if args.load_dir != '':
+            ckpt_paths = [args.load_dir]
+        else:
+            ckpt_paths = [os.path.join(cfg['CKPT_DIR'], 'policy_latest.ckpt')]
         results = []
         for ckpt_path in ckpt_paths:
             success_rate, avg_return = eval_bc(cfg, ckpt_path, save_episode=args.save_episode)
@@ -124,7 +127,7 @@ def eval_bc(cfg, ckpt_path, save_episode=True):
     
     # load policy and stats
     policy = make_policy(policy_class, cfg)
-    loading_status = policy.load_state_dict(torch.load(ckpt_path), strict = False)
+    loading_status = policy.load_state_dict(torch.load(ckpt_path)['model'], strict = False)
     print(loading_status)
     policy.cuda()
     policy.eval()
@@ -135,6 +138,9 @@ def eval_bc(cfg, ckpt_path, save_episode=True):
     if cfg['TASK_NAME'] == 'isaac_gripper':
         from utils.inference.isaac_gripper import IsaacGripperTestEnviManager
         envi_manager = IsaacGripperTestEnviManager(cfg, policy, stats)
+    elif cfg['TASK_NAME'] == 'isaac_singlebox':
+        from utils.inference.isaac_singlebox import IsaacSingleBoxTestEnviManager
+        envi_manager = IsaacSingleBoxTestEnviManager(cfg, policy, stats)
 
     reward_info = envi_manager.inference()
 
@@ -176,8 +182,9 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
 
     policy = make_policy(policy_class, cfg)
     if load_dir != '':
-        loading_status = policy.load_state_dict(torch.load(load_dir), strict = False)
-        start_iter = int(load_dir.split('/')[-1][11:-5]) + 1
+        load_dict = torch.load(load_dir)
+        loading_status = policy.load_state_dict(load_dict['model'], strict = False)
+        start_iter = load_dict['iter']
     else:
         start_iter = 0
     policy.cuda()
@@ -242,10 +249,12 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
             )
 
             tb_writer.add_scalar('loss/total_loss', loss.item(), iter_cnt)
+            for dec_id in range(cfg['POLICY']['DEC_LAYERS']):
+                tb_writer.add_scalar(f'loss/dec_{dec_id}', forward_dict[f'dec_{dec_id}'].item(), iter_cnt)
             tb_writer.add_scalar('state/lr', optimizer.param_groups[0]["lr"], iter_cnt)
 
         # validation
-        if main_thread and iter_cnt % cfg['EVAL']['EVAL_INTERVAL'] == 0 and iter_cnt != 0:
+        if cfg['EVAL']['DATA_EVAL_RATIO'] > 0 and main_thread and iter_cnt % cfg['EVAL']['EVAL_INTERVAL'] == 0 and iter_cnt != 0:
             logger.info("Start evaluation at iteration {}...".format(iter_cnt))
             with torch.inference_mode():
                 policy.eval()
@@ -256,7 +265,7 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
                     eval_total_iter_num = cfg['EVAL']['MAX_VAL_SAMPLE_NUM']
 
                 for eval_data, eval_iter_cnt in zip(val_dataloader, range(eval_total_iter_num)):
-                    forward_dict = forward_pass(data, policy, cfg)
+                    forward_dict = forward_pass(eval_data, policy, cfg)
                     epoch_dicts.append(forward_dict)
                 epoch_summary = compute_dict_mean(epoch_dicts)
 
@@ -271,24 +280,27 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
 
         # Save checkpoint
         if main_thread and iter_cnt % cfg['TRAIN']['SAVE_CHECKPOINT_INTERVAL'] == 0 and iter_cnt != 0:
-            ckpt_path = os.path.join(ckpt_dir, f'policy_iter{iter_cnt}.ckpt')
-            save_model(policy, ckpt_path)
+            ckpt_path = os.path.join(ckpt_dir, f'policy_latest.ckpt')
+            save_model(policy, ckpt_path, iter_cnt)
             
     if main_thread:
         ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')
-        save_model(policy, ckpt_path)
+        save_model(policy, ckpt_path, iter_cnt)
         best_iter, min_val_loss, best_state_dict = best_ckpt_info
-        logger.info(f'Training finished:\nSeed {seed}, val loss {min_val_loss:.6f} at iteration {best_iter}')
+        logger.info(f'Training finished!')
 
     comm.synchronize()
     tb_writer.close()
     for handler in logging.root.handlers:
         handler.close()
 
-def save_model(model, save_path):
+def save_model(model, save_path, iter_cnt):
     model_ckpt = model.state_dict()
-    torch.save(model_ckpt, save_path)
-    print('Save model done!')
+    save_dict = {
+        'iter': iter_cnt,
+        'model': model_ckpt
+    }
+    torch.save(save_dict, save_path)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

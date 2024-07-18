@@ -8,6 +8,7 @@ Copy-paste from torch.nn.Transformer with modifications:
     * decoder returns a stack of activations from all decoding layers
 """
 import copy
+import pdb
 from typing import Optional, List
 
 import torch
@@ -59,8 +60,8 @@ class Transformer(nn.Module):
         tgt = torch.zeros_like(query_embed)
         memory = self.encoder(src, src_key_padding_mask=mask, pos=pos_embed)
         hs = self.decoder(tgt, memory, memory_key_padding_mask=mask,
-                          pos=pos_embed, query_pos=query_embed)
-        hs = hs.transpose(1, 2)
+                          pos=pos_embed, query_pos=query_embed) # Left shape: (num_dec, num_query, B, C)
+        hs = hs.transpose(1, 2) # Left shape: (num_dec, B, num_query, C)
         return hs
 
 class TransformerEncoder(nn.Module):
@@ -121,7 +122,7 @@ class TransformerDecoder(nn.Module):
             if self.return_intermediate:
                 intermediate.pop()
                 intermediate.append(output)
-
+        
         if self.return_intermediate:
             return torch.stack(intermediate)
 

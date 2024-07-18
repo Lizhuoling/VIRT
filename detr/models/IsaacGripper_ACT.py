@@ -178,7 +178,6 @@ class IsaacGripperDETR(nn.Module):
             src = torch.cat((src, joint_obs_src), dim = 0)  # Left shape: (L, B, C)
             pos = torch.cat((pos, joint_obs_pos), dim = 0)  # Left shape: (L, B, C)
             mask = torch.cat((mask, observation_is_pad), dim = 1) # Left shape: (B, L)
-
         if self.cfg['POLICY']['USE_VAE']:
             src = torch.cat((src, latent_input), dim = 0)  # Left shape: (L, B, C)
             pos = torch.cat((pos, vae_pos), dim = 0)  # Left shape: (L, B, C)
@@ -192,12 +191,15 @@ class IsaacGripperDETR(nn.Module):
             mask = torch.cat((mask, task_instruction_mask), dim = 1) # Left shape: (B, L)
     
         query_emb = self.query_embed.weight.unsqueeze(1).repeat(1, bs, 1)   # Left shape: (num_query, B, C)
-        hs = self.transformer(src, mask, query_emb, pos)[0] # Left shape: (B, num_query, C)
+        hs = self.transformer(src, mask, query_emb, pos) # Left shape: (num_dec, B, num_query, C)
+        
+        if not is_training: hs = hs[-1] 
 
-        a_hat = self.action_head(hs)
+        a_hat = self.action_head(hs)    # left shape: (num_dec, B, num_query, action_dim)
         is_pad_hat = self.is_pad_head(hs)
+        
         return a_hat, is_pad_hat, [mu, logvar]
-
+    
 def mlp(input_dim, hidden_dim, output_dim, hidden_depth):
     if hidden_depth == 0:
         mods = [nn.Linear(input_dim, output_dim)]

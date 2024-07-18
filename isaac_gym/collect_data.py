@@ -22,7 +22,9 @@ import matplotlib.pyplot as plt
 from itertools import combinations
 
 import leap_motion
-from gripper_hand import hand_imitate
+from gripper_hand import GripperHand
+from gripper_singlebox import GripperSingleBox
+from gripper_fixedboxes import GripperFixedBoxes
 
 leap_mode = 'right'
 leap_conf_thre = 0.3
@@ -192,7 +194,7 @@ class SaveDataManager():
 
         self.episode_index += 1
 
-def collect_data_main(save_data_path = ""):
+def collect_data_main(task_name, save_data_path = ""):
     global leap_mode, leap_conf_thre
 
     save_data_flag = False
@@ -207,7 +209,12 @@ def collect_data_main(save_data_path = ""):
     leap_connection = leap_motion.leap.Connection()
     leap_connection.add_listener(my_listener)
     
-    isaac_env = hand_imitate(num_envs = 1)
+    if task_name == 'isaac_gripper':
+        isaac_env = GripperHand(num_envs = 1)
+    elif task_name == 'isaac_singlebox':
+        isaac_env = GripperSingleBox(num_envs = 1)
+    elif task_name == 'isaac_fixedboxes':
+        isaac_env = GripperFixedBoxes(num_envs = 1)
     kf = TrajectoryFilter9D()
 
     cnt = 0
@@ -264,8 +271,9 @@ def collect_data_main(save_data_path = ""):
     isaac_env.clean_up()
 
 if __name__ == '__main__':
-    save_data_path = '/home/cvte/twilight/home/data/own_data/isaac_gripper'
-    collect_data_main(save_data_path = save_data_path)
+    task_name = 'isaac_fixedboxes'
+    save_data_path = '/home/cvte/twilight/data/isaac_fixedboxes'
+    collect_data_main(task_name = task_name, save_data_path = save_data_path)
 
     #collect_data_main()
 

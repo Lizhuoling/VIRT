@@ -1,4 +1,5 @@
 import pdb
+import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import torchvision.transforms as transforms
@@ -22,21 +23,25 @@ class IsaacGripper_ACTPolicy(nn.Module):
             a_hat, is_pad_hat, (mu, logvar) = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, action = action, \
                             observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list)
             loss_dict = dict()
-            
-            all_l1 = F.l1_loss(action, a_hat, reduction='none')
-            l1 = (all_l1 * ~action_is_pad.unsqueeze(-1)).mean()
-            loss_dict['l1'] = l1
+            all_l1 = F.l1_loss(action.unsqueeze(0).expand(a_hat.shape[0], -1, -1, -1), a_hat, reduction='none') # Left shape: (num_dec, B, num_query, num_action)
+            expand_action_is_pad = action_is_pad[None, :, :, None].expand(all_l1.shape[0], -1, -1, all_l1.shape[3])    # action_is_pad shape: (B, num_query), expand_action_is_pad shape: (num_dec, B, num_query, num_action)
+            mask_l1 = (all_l1 * ~expand_action_is_pad).sum(dim = (-1, -2)) # Left shape: (num_dec, B)
+            valid_count = torch.clip((~action_is_pad)[None].sum(dim = -1), min = 1)
+            l1 = (mask_l1 / valid_count).mean(dim = -1)    # Left shape: (num_dec,)
+            for dec_id in range(l1.shape[0]):
+                loss_dict[f'dec_{dec_id}'] = l1[dec_id]
+            total_l1 = l1.sum()
             if self.cfg['POLICY']['USE_VAE']:
                 total_kld, dim_wise_kld, mean_kld = kl_divergence(mu, logvar)
                 loss_dict['kl'] = total_kld[0]
-                loss_dict['loss'] = loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
+                loss_dict['loss'] = total_l1 + loss_dict['kl'] * self.kl_weight
             else:
-                loss_dict['loss'] = l1
+                loss_dict['loss'] = total_l1
+            
             return loss_dict
         else: # inference time
             a_hat, _, (_, _) = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, \
                             observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, task_instruction_list = task_instruction_list)
-            
             return a_hat
 
 def kl_divergence(mu, logvar):

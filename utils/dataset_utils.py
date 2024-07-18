@@ -57,22 +57,31 @@ def load_data(cfg):
     # obtain normalization stats for qpos and action
     norm_stats = get_norm_stats(dataset_dir, norm_keys)
     ids_map_dict, max_idx = get_ids_map(dataset_dir)
-    shuffled_indices = np.random.permutation(max_idx)
-    train_indices = shuffled_indices[:int(data_train_ratio * max_idx)]
-    val_indices = shuffled_indices[int(data_train_ratio * max_idx):]
+    if cfg['TRAIN']['DATA_SAMPLE_MOED'] == 'random':
+        shuffled_indices = np.random.permutation(max_idx)
+    elif cfg['TRAIN']['DATA_SAMPLE_MOED'] == 'sequence':
+        shuffled_indices = get_sequence_indices(ids_map_dict = ids_map_dict, chunk_size = cfg['POLICY']['CHUNK_SIZE'])
+        random.shuffle(shuffled_indices)
+
+    if data_eval_ratio > 0: 
+        train_indices = shuffled_indices[:int(data_train_ratio * max_idx)]
+        val_indices = shuffled_indices[int(data_train_ratio * max_idx):]
+    else:
+        train_indices = shuffled_indices
     
     # construct dataset and dataloader
     if cfg['TASK_NAME'] == 'own_gripper':
         train_transforms = build_ACTTransforms(cfg, is_train = True)
-        val_transforms = build_ACTTransforms(cfg, is_train = False)
         train_dataset = ACTDataset(cfg, transforms = train_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = train_indices, is_train = True)
-        val_dataset = ACTDataset(cfg, transforms = val_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = val_indices, is_train = False)
-    elif cfg['TASK_NAME'] == 'isaac_gripper':
-        build_IsaacGripperTransforms
+        if data_eval_ratio > 0:
+            val_transforms = build_ACTTransforms(cfg, is_train = False)
+            val_dataset = ACTDataset(cfg, transforms = val_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = val_indices, is_train = False)
+    elif cfg['TASK_NAME'] in ['isaac_gripper', 'isaac_singlebox']:
         train_transforms = build_IsaacGripperTransforms(cfg, is_train = True)
-        val_transforms = build_IsaacGripperTransforms(cfg, is_train = False)
         train_dataset = IsaacGripperDataset(cfg, transforms = train_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = train_indices, is_train = True)
-        val_dataset = IsaacGripperDataset(cfg, transforms = val_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = val_indices, is_train = False)
+        if data_eval_ratio > 0:
+            val_transforms = build_IsaacGripperTransforms(cfg, is_train = False)
+            val_dataset = IsaacGripperDataset(cfg, transforms = val_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = val_indices, is_train = False)
 
     if is_debug:
         num_workers = 0
@@ -80,16 +89,18 @@ def load_data(cfg):
         num_workers = 8
     
     train_sample_per_gpu = cfg['TRAIN']['BATCH_SIZE'] // comm.get_world_size()
-    val_sample_per_gpu = cfg['EVAL']['BATCH_SIZE'] // comm.get_world_size()
     train_sampler = samplers.TrainingSampler(len(train_dataset))
-    val_sampler = samplers.InferenceSampler(len(val_dataset))
     train_batch_sampler = torch.utils.data.sampler.BatchSampler(train_sampler, train_sample_per_gpu, drop_last=True)
-    val_batch_sampler = torch.utils.data.sampler.BatchSampler(val_sampler, val_sample_per_gpu, drop_last=True)
-
     train_dataloader = DataLoader(train_dataset, num_workers=num_workers, batch_sampler=train_batch_sampler)
-    val_dataloader = DataLoader(val_dataset, num_workers=num_workers, batch_sampler=val_batch_sampler)
 
-    return train_dataloader, val_dataloader, norm_stats
+    if data_eval_ratio > 0: 
+        val_sample_per_gpu = cfg['EVAL']['BATCH_SIZE'] // comm.get_world_size()
+        val_sampler = samplers.InferenceSampler(len(val_dataset))
+        val_batch_sampler = torch.utils.data.sampler.BatchSampler(val_sampler, val_sample_per_gpu, drop_last=True)
+        val_dataloader = DataLoader(val_dataset, num_workers=num_workers, batch_sampler=val_batch_sampler)
+        return train_dataloader, val_dataloader, norm_stats
+    else:
+        return train_dataloader, None, norm_stats
 
 def get_ids_map(dataset_dir):
     data_file_list = get_hdf5_list(os.path.join(dataset_dir, 'h5py'))
@@ -102,6 +113,12 @@ def get_ids_map(dataset_dir):
             idx_start += episode_len
     return ids_map, idx_start
 
+def get_sequence_indices(ids_map_dict, chunk_size):
+    indices = []
+    for key, value in ids_map_dict.items():
+        start, end = value
+        indices += [ele for ele in range(start, end, chunk_size)]
+    return indices
 
 ### env utils
 

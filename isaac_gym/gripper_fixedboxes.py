@@ -1,7 +1,7 @@
 from isaacgym import gymapi
 from isaacgym import gymutil
 from isaacgym import gymtorch
-from isaacgym.torch_utils import *
+from isaacgym.torch_utils import quat_rotate, quat_conjugate, quat_mul
 
 import pdb
 import math
@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 from itertools import combinations
 import argparse
 
-class GripperHand():
+class GripperFixedBoxes():
     def __init__(self, num_envs = 1, seed = None):
         self.num_envs = num_envs
 
@@ -323,8 +323,7 @@ class GripperHand():
             # Generate language instruction.
             self.box_sample_ids = random.sample(range(0, box_num), 2)
             box_color_list = list(box_colors.keys())
-            self.task_instruction.append("Please place the {} box in the container and put the {} box on the {} box."\
-                .format(box_color_list[self.box_sample_ids[0]], box_color_list[self.box_sample_ids[1]], box_color_list[self.box_sample_ids[0]]))
+            self.task_instruction.append("Please place the blue box in the container and put the red box on the blue box.")
 
         # point camera at middle env
         cam_pos = gymapi.Vec3(4, 3, 2)
