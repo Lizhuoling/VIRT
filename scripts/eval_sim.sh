@@ -1,5 +1,5 @@
-exp_id=isaac_singlebox_vae_chunk300
-config_name=isaac_singlebox_vae_chunk300
+exp_id=isaac_gripper2
+config_name=isaac_gripper2
 
 nnodes=1
 nproc_per_node=1

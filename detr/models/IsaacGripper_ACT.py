@@ -53,9 +53,10 @@ class IsaacGripperDETR(nn.Module):
         self.transformer = transformer
         self.encoder = encoder  # VAE encoder
         hidden_dim = transformer.d_model
-        self.action_head = nn.Linear(hidden_dim, state_dim) # Decode transformer output as action.
-        self.is_pad_head = nn.Linear(hidden_dim, 1) # Predict which output action is invalid.
         self.query_embed = nn.Embedding(chunk_size, hidden_dim)
+        self.action_head = nn.Linear(hidden_dim, state_dim) # Decode transformer output as action.
+        if self.cfg['POLICY']['USE_UNCERTAINTY']:
+            self.uncern_head = nn.Linear(hidden_dim, 1)
 
         # VAE Encoder
         if self.cfg['POLICY']['USE_VAE']:
@@ -196,9 +197,12 @@ class IsaacGripperDETR(nn.Module):
         if not is_training: hs = hs[-1] 
 
         a_hat = self.action_head(hs)    # left shape: (num_dec, B, num_query, action_dim)
-        is_pad_hat = self.is_pad_head(hs)
-        
-        return a_hat, is_pad_hat, [mu, logvar]
+        if self.cfg['POLICY']['USE_UNCERTAINTY']:
+            a_hat_uncern = self.uncern_head(hs) # left shape: (num_dec, B, num_query, 1)
+            a_hat_uncern = torch.clamp(a_hat_uncern, min = self.cfg['POLICY']['UNCERTAINTY_RANGE'][0], max = self.cfg['POLICY']['UNCERTAINTY_RANGE'][1])
+        else:
+            a_hat_uncern = None
+        return a_hat, a_hat_uncern, [mu, logvar]
     
 def mlp(input_dim, hidden_dim, output_dim, hidden_depth):
     if hidden_depth == 0:

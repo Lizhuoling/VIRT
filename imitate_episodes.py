@@ -164,13 +164,13 @@ def forward_pass(data, policy, cfg):
         image_data, qpos_data, action_data, is_pad = image_data.cuda(), qpos_data.cuda(), action_data.cuda(), is_pad.cuda()
         return policy(qpos_data, image_data, action_data, is_pad)
     elif cfg['POLICY']['POLICY_NAME'] == 'IsaacGripper_ACT':
-        image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction_list = data
+        image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction_list, vec_loss_weight = data
         
-        image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad = image_data.cuda(), past_action.cuda(), action_data.cuda(), \
-            end_observation.cuda(), joint_observation.cuda(), observation_is_pad.cuda(), past_action_is_pad.cuda(), action_is_pad.cuda()
-
+        image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, vec_loss_weight = image_data.cuda(), past_action.cuda(), action_data.cuda(), \
+            end_observation.cuda(), joint_observation.cuda(), observation_is_pad.cuda(), past_action_is_pad.cuda(), action_is_pad.cuda(), vec_loss_weight.cuda()
+        
         return policy(image = image_data, past_action = past_action, end_obs = end_observation, joint_obs = joint_observation, action = action_data, observation_is_pad = observation_is_pad, \
-                      past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list)
+                      past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list, vec_loss_weight = vec_loss_weight)
 
 def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
     logger = logging.getLogger("grasp")
@@ -213,17 +213,16 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
         # training
         policy.train()
         optimizer.zero_grad()
-        forward_dict = forward_pass(data, policy, cfg)
+        total_loss, loss_dict = forward_pass(data, policy, cfg)
         # backward
-        loss = forward_dict['loss']
-        loss.backward()
+        total_loss.backward()
         optimizer.step()
         if iter_cnt < warmup_iters:
             warmup_scheduler.step(iter_cnt)
         else:
             scheduler.step(iter_cnt)
 
-        train_meters.update(**forward_dict)
+        train_meters.update(**loss_dict)
         batch_time = time.time() - end
         end = time.time()
         train_meters.update(time=batch_time, data=data_time)
@@ -248,9 +247,13 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
                 )
             )
 
-            tb_writer.add_scalar('loss/total_loss', loss.item(), iter_cnt)
+            tb_writer.add_scalar('loss/total_loss', total_loss.item(), iter_cnt)
             for dec_id in range(cfg['POLICY']['DEC_LAYERS']):
-                tb_writer.add_scalar(f'loss/dec_{dec_id}', forward_dict[f'dec_{dec_id}'].item(), iter_cnt)
+                tb_writer.add_scalar(f'loss/dec_{dec_id}', loss_dict[f'dec_{dec_id}'], iter_cnt)
+            if cfg['POLICY']['USE_VAE']:
+                tb_writer.add_scalar(f'loss/vae_loss', loss_dict['vae_loss'], iter_cnt)
+            if cfg['POLICY']['USE_UNCERTAINTY']:
+                tb_writer.add_scalar(f'loss/loss_without_uncern', loss_dict['loss_without_uncern'], iter_cnt)
             tb_writer.add_scalar('state/lr', optimizer.param_groups[0]["lr"], iter_cnt)
 
         # validation
@@ -265,8 +268,8 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
                     eval_total_iter_num = cfg['EVAL']['MAX_VAL_SAMPLE_NUM']
 
                 for eval_data, eval_iter_cnt in zip(val_dataloader, range(eval_total_iter_num)):
-                    forward_dict = forward_pass(eval_data, policy, cfg)
-                    epoch_dicts.append(forward_dict)
+                    total_loss, loss_dict = forward_pass(eval_data, policy, cfg)
+                    epoch_dicts.append(loss_dict)
                 epoch_summary = compute_dict_mean(epoch_dicts)
 
                 epoch_val_loss = epoch_summary['loss']
@@ -286,7 +289,6 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
     if main_thread:
         ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')
         save_model(policy, ckpt_path, iter_cnt)
-        best_iter, min_val_loss, best_state_dict = best_ckpt_info
         logger.info(f'Training finished!')
 
     comm.synchronize()
