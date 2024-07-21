@@ -18,15 +18,20 @@ class IsaacGripper_ACTPolicy(nn.Module):
         if self.cfg['POLICY']['USE_VAE']:
             self.kl_weight = cfg['POLICY']['KL_WEIGHT']
 
-    def __call__(self, image, past_action, end_obs, joint_obs, action=None, observation_is_pad = None, past_action_is_pad = None, action_is_pad = None, task_instruction_list = None, vec_loss_weight = None):
+    def __call__(self, image, past_action, end_obs, joint_obs, action=None, observation_is_pad = None, past_action_is_pad = None, action_is_pad = None, task_instruction_list = None, \
+                 vec_loss_weight = None, gripper_loss_weight = None):
         env_state = None
         if action is not None: # training or validation time
             a_hat, a_hat_uncern, (mu, logvar) = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, action = action, \
                             observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list)
             loss_dict = dict()
             all_l1 = F.l1_loss(action.unsqueeze(0).expand(a_hat.shape[0], -1, -1, -1), a_hat, reduction='none') # Left shape: (num_dec, B, num_query, num_action)
+            ori_l1_t_sum = all_l1.sum(dim = 2, keepdim = True).detach()
             if self.cfg['TRAIN']['USE_VELOCITY_LOSS_WEIGHT']:
                 all_l1 = all_l1 * vec_loss_weight[None, :, :, None].expand(all_l1.shape[0], -1, -1, all_l1.shape[3]) # Left shape: (num_dec, B, num_query, num_action)
+            if self.cfg['TRAIN']['USE_GRIPPER_LOSS_WEIGHT']:
+                all_l1 = all_l1 * gripper_loss_weight[None, :, :, None].expand(all_l1.shape[0], -1, -1, all_l1.shape[3])
+            all_l1 = all_l1 * (ori_l1_t_sum / all_l1.sum(dim = 2, keepdim = True).detach())
             expand_action_is_pad = action_is_pad[None, :, :, None].expand(all_l1.shape[0], -1, -1, all_l1.shape[3])    # action_is_pad shape: (B, num_query), expand_action_is_pad shape: (num_dec, B, num_query, num_action)
             mask_l1 = (all_l1 * ~expand_action_is_pad).sum(dim = -1) # Left shape: (num_dec, B, num_query)
             if self.cfg['POLICY']['USE_UNCERTAINTY']:

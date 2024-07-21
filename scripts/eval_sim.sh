@@ -1,11 +1,11 @@
-exp_id=isaac_gripper2
-config_name=isaac_gripper2
+exp_id=sim_isaac_singlebox_vae_chunk300
+config_name=isaac_singlebox_vae_chunk300
 
 nnodes=1
 nproc_per_node=1
 node_rank=0
 master_addr=172.17.167.51
-master_port=29513
+master_port=29515
 
 CUDA_VISIBLE_DEVICES=0 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_node --node_rank=$node_rank --master_addr=$master_addr --master_port $master_port \
     imitate_episodes.py \

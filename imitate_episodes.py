@@ -164,13 +164,13 @@ def forward_pass(data, policy, cfg):
         image_data, qpos_data, action_data, is_pad = image_data.cuda(), qpos_data.cuda(), action_data.cuda(), is_pad.cuda()
         return policy(qpos_data, image_data, action_data, is_pad)
     elif cfg['POLICY']['POLICY_NAME'] == 'IsaacGripper_ACT':
-        image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction_list, vec_loss_weight = data
+        image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction_list, vec_loss_weight, gripper_loss_weight = data
         
-        image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, vec_loss_weight = image_data.cuda(), past_action.cuda(), action_data.cuda(), \
-            end_observation.cuda(), joint_observation.cuda(), observation_is_pad.cuda(), past_action_is_pad.cuda(), action_is_pad.cuda(), vec_loss_weight.cuda()
+        image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, vec_loss_weight, gripper_loss_weight = image_data.cuda(), past_action.cuda(), action_data.cuda(), \
+            end_observation.cuda(), joint_observation.cuda(), observation_is_pad.cuda(), past_action_is_pad.cuda(), action_is_pad.cuda(), vec_loss_weight.cuda(), gripper_loss_weight.cuda()
         
         return policy(image = image_data, past_action = past_action, end_obs = end_observation, joint_obs = joint_observation, action = action_data, observation_is_pad = observation_is_pad, \
-                      past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list, vec_loss_weight = vec_loss_weight)
+                      past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list, vec_loss_weight = vec_loss_weight, gripper_loss_weight = gripper_loss_weight)
 
 def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
     logger = logging.getLogger("grasp")
@@ -206,7 +206,7 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
     start_training_time = time.time()
     end = time.time()
     train_meters = MetricLogger(delimiter=", ", )
-
+    
     for data, iter_cnt in zip(train_dataloader, range(start_iter, num_iterations)):
         data_time = time.time() - end
 

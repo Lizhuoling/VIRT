@@ -269,6 +269,7 @@ def collect_data_main(task_name, save_data_path = ""):
                     print('\033[93m' + "Task instruction: {}".format(isaac_env.task_instruction[0]) + '\033[0m')
 
     isaac_env.clean_up()
+    cv2.destroyAllWindows()
 
 if __name__ == '__main__':
     task_name = 'isaac_fixedboxes'

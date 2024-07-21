@@ -21,12 +21,19 @@ class IsaacSingleBoxTestEnviManager():
 
     def inference(self,):
         rewards = np.zeros((self.cfg['EVAL']['TEST_ENVI_NUM'],), dtype = np.float32)
+
         with torch.no_grad():
             envi_start_idx = 0
             for batch_idx in range(self.cfg['EVAL']['TEST_ENVI_BATCH_NUM']):
                 print("Start inference batch {}...".format(batch_idx))
                 isaac_envi = GripperSingleBox(num_envs = self.num_envi_per_batch_list[batch_idx])
                 #print(isaac_envi.task_instruction)
+
+                # Init the envi for one second
+                init_start_time = time.time()
+                while time.time() - init_start_time <= 1:
+                    isaac_envi.update_simulator_before_ctrl()
+                    isaac_envi.update_simulator_after_ctrl()
 
                 enb_obs_list = []
                 joint_obs_list = []
@@ -87,7 +94,7 @@ class IsaacSingleBoxTestEnviManager():
             success_rate = success_rate,
             average_reward = average_reward
         )
-        print(f'\nreward0_ratio: {reward0_ratio}\nreward1_ratio: {reward1_ratio}\nreward2_ratio: {reward2_ratio}\nreward3_ratio: {reward3_ratio}')
+        print(f'\nreward0_ratio: {reward0_ratio}\nreward1_ratio: {reward1_ratio}\n')
         return reward_info
         
 
@@ -119,14 +126,17 @@ class IsaacSingleBoxTestEnviManager():
             hand_rgb_image = hand_rgb_image.reshape(240, 320, 4)[:, :, :3]
             env_image_dict['wrist_camera'] = hand_rgb_image
             images.append(env_image_dict)
+
         all_cam_image_list = []
         for camera_name in self.cfg['DATA']['CAMERA_NAMES']:
             single_camera_images = np.stack([ele[camera_name] for ele in images], axis = 0)   # Left shape: (num_envi, H, W, C)
             all_cam_image_list.append(single_camera_images)
+        
         all_cam_images = np.stack(all_cam_image_list, axis = 0)   # Left shape: (num_camera, num_envi, H, W, C)
         all_cam_images = all_cam_images.transpose(1, 0, 4, 2, 3)     # Left shape: (num_envi, num_camera, C, H, W)
         num_envi, num_cam, C, H, W = all_cam_images.shape
         all_cam_images = torch.from_numpy(all_cam_images).float().reshape(num_envi * num_cam, C, H, W).cuda()
+        all_cam_images = all_cam_images.float() / 255
         all_cam_images = F.normalize(all_cam_images, mean=self.cfg['DATA']['IMG_NORM_MEAN'], std=self.cfg['DATA']['IMG_NORM_STD'])  # Left shape: (num_envi * num_camera, C, H, W)
         all_cam_images = all_cam_images.view(num_envi, num_cam, C, H, W)
         

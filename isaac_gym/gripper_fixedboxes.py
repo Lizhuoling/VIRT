@@ -471,7 +471,6 @@ class GripperFixedBoxes():
     def clean_up(self):
         self.gym.destroy_viewer(self.viewer)
         self.gym.destroy_sim(self.sim)
-        cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    envi = GripperHand()
+    envi = GripperFixedBoxes()

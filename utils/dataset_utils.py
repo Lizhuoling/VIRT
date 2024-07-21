@@ -57,9 +57,9 @@ def load_data(cfg):
     # obtain normalization stats for qpos and action
     norm_stats = get_norm_stats(dataset_dir, norm_keys)
     ids_map_dict, max_idx = get_ids_map(dataset_dir)
-    if cfg['TRAIN']['DATA_SAMPLE_MOED'] == 'random':
+    if cfg['TRAIN']['DATA_SAMPLE_MODE'] == 'random':
         shuffled_indices = np.random.permutation(max_idx)
-    elif cfg['TRAIN']['DATA_SAMPLE_MOED'] == 'sequence':
+    elif cfg['TRAIN']['DATA_SAMPLE_MODE'] == 'sequence':
         shuffled_indices = get_sequence_indices(ids_map_dict = ids_map_dict, chunk_size = cfg['POLICY']['CHUNK_SIZE'])
         random.shuffle(shuffled_indices)
 
@@ -92,7 +92,7 @@ def load_data(cfg):
     train_sampler = samplers.TrainingSampler(len(train_dataset))
     train_batch_sampler = torch.utils.data.sampler.BatchSampler(train_sampler, train_sample_per_gpu, drop_last=True)
     train_dataloader = DataLoader(train_dataset, num_workers=num_workers, batch_sampler=train_batch_sampler)
-
+    
     if data_eval_ratio > 0: 
         val_sample_per_gpu = cfg['EVAL']['BATCH_SIZE'] // comm.get_world_size()
         val_sampler = samplers.InferenceSampler(len(val_dataset))

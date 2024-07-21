@@ -166,9 +166,9 @@ class GripperSingleBox():
         container_right_asset  = self.gym.create_box(self.sim, container_right_dims.x, container_right_dims.y, container_right_dims.z, asset_options)
 
         # create box asset
-        box_size = 0.045
+        self.box_size = 0.045
         asset_options = gymapi.AssetOptions()
-        box_asset = self.gym.create_box(self.sim, box_size, box_size, box_size, asset_options)
+        box_asset = self.gym.create_box(self.sim, self.box_size, self.box_size, self.box_size, asset_options)
             
         # load franka asset
         asset_root = "/home/cvte/Documents/isaacgym/assets"
@@ -241,6 +241,9 @@ class GripperSingleBox():
         container_right_pose.p  = gymapi.Vec3(container_bottom_pose.p.x + container_right_pose_offset.x, 
                                             container_bottom_pose.p.y + container_right_pose_offset.y,
                                             container_bottom_pose.p.z + container_right_pose_offset.z)
+        
+        self.table_dims = table_dims
+        self.container_bottom_pose = container_bottom_pose
 
         boxes_pose = []
         box_num = 1
@@ -279,7 +282,7 @@ class GripperSingleBox():
             for cnt, box_pose in enumerate(boxes_pose):
                 box_pose.p.x = table_pose.p.x + np.random.uniform(-0.15, 0.05)
                 box_pose.p.y = table_pose.p.y + np.random.uniform(0.05, 0.3)
-                box_pose.p.z = table_dims.z + 0.5 * box_size
+                box_pose.p.z = table_dims.z + 0.5 * self.box_size
                 stack_groups.append([[box_pose, cnt]])
             
             box_handles = [self.gym.create_actor(env, box_asset, box_pose, "box{}".format(box_cnt), i, 0) for box_cnt, box_pose in enumerate(boxes_pose)]
@@ -296,19 +299,19 @@ class GripperSingleBox():
             self.box_idxs.append(env_box_idxs_dict)
 
             # add franka
-            franka_handle = self.gym.create_actor(env, franka_asset, franka_pose, "franka", i, 2)
+            self.franka_handle = self.gym.create_actor(env, franka_asset, franka_pose, "franka", i, 2)
 
             # set dof properties
-            self.gym.set_actor_dof_properties(env, franka_handle, franka_dof_props)
+            self.gym.set_actor_dof_properties(env, self.franka_handle, franka_dof_props)
 
             # set initial dof states
-            self.gym.set_actor_dof_states(env, franka_handle, default_dof_state, gymapi.STATE_ALL)
+            self.gym.set_actor_dof_states(env, self.franka_handle, default_dof_state, gymapi.STATE_ALL)
 
             # set initial position targets
-            self.gym.set_actor_dof_position_targets(env, franka_handle, default_dof_pos)
+            self.gym.set_actor_dof_position_targets(env, self.franka_handle, default_dof_pos)
 
             # get global index of hand in rigid body state tensor
-            hand_idx = self.gym.find_actor_rigid_body_index(env, franka_handle, "panda_hand", gymapi.DOMAIN_SIM)
+            hand_idx = self.gym.find_actor_rigid_body_index(env, self.franka_handle, "panda_hand", gymapi.DOMAIN_SIM)
             self.hand_idxs.append(hand_idx)
 
             # Generate language instruction.
@@ -348,7 +351,7 @@ class GripperSingleBox():
             local_transform = gymapi.Transform()
             local_transform.p = gymapi.Vec3(0.1, 0, 0)
             local_transform.r = gymapi.Quat.from_euler_zyx(0, -90, 0)
-            finger_handle = self.gym.find_actor_rigid_body_handle(env, franka_handle, "panda_hand")
+            finger_handle = self.gym.find_actor_rigid_body_handle(env, self.franka_handle, "panda_hand")
             self.gym.attach_camera_to_body(hand_camera, env, finger_handle, local_transform, gymapi.FOLLOW_TRANSFORM)
 
             self.cameras.append(dict(top_camera = top_camera, side_camera1 = side_camera1, side_camera2 = side_camera2, hand_camera = hand_camera))
@@ -427,6 +430,7 @@ class GripperSingleBox():
 
             vis_frame = np.concatenate((top_bgr_image, side1_bgr_image, side2_bgr_image, hand_bgr_image), axis = 1)
             cv2.imshow('vis', vis_frame)
+            cv2.waitKey(1)
 
             images = dict(
                 top_bgr_image = top_bgr_image,
@@ -460,7 +464,6 @@ class GripperSingleBox():
     def clean_up(self):
         self.gym.destroy_viewer(self.viewer)
         self.gym.destroy_sim(self.sim)
-        cv2.destroyAllWindows()
 
 if __name__ == '__main__':
     envi = GripperSingleBox()

@@ -103,7 +103,7 @@ class IsaacGripperDETR(nn.Module):
         task_instruction_list: A list with the length of batch, each element is a string.
         """
         is_training = action is not None # train or val
-        bs = image.shape[0]
+        bs, num_cam, in_c, in_h, in_w = image.shape
 
         if self.cfg["POLICY"]["USE_CLIP"]:
             text_tokens = self.clip_tokenizer(task_instruction_list, padding=True, return_tensors="pt").to(image.device)
@@ -144,16 +144,12 @@ class IsaacGripperDETR(nn.Module):
             mu = logvar = None
         
         # Image observation features and position embeddings
-        all_cam_features = []
-        all_cam_pos = []
-        for cam_id, cam_name in enumerate(self.camera_names):
-            features, pos = self.backbones[0](image[:, cam_id]) # HARDCODED
-            features = features[0] # take the last layer feature
-            pos = pos[0]
-            all_cam_features.append(self.input_proj(features))
-            all_cam_pos.append(pos)
-        img_src = torch.stack(all_cam_features, axis=2)   # Left shape: (B, C, N, H, W)
-        cam_pos = torch.stack(all_cam_pos, axis=2)  # Left shape: (1, C, N, H, W)
+        image = image.view(bs * num_cam, in_c, in_h, in_w)  # Left shape: (bs * num_cam, C, H, W)
+        features, pos = self.backbones[0](image)
+        features, pos = features[0], pos[0] # features shape: (bs * num_cam, C, H, W), pos shape: (1, C, H, W)
+        features = self.input_proj(features)
+        img_src = features.view(bs, num_cam, -1, features.shape[-2], features.shape[-1]).permute(0, 2, 1, 3, 4)  # Left shape: (B, C, N, H, W)
+        cam_pos = pos.view(1, 1, -1, pos.shape[-2], pos.shape[-1]).permute(0, 2, 1, 3, 4)  # Left shape: (1, C, 1, H, W)
         camera_view_pos = self.camera_view_pos_embed.weight.permute(1, 0)[None, :, :, None, None]  # (1, C, N, 1, 1)
         cam_pos = (cam_pos + camera_view_pos).expand(bs, -1, -1, -1, -1)  # (B, C, N, H, W)
         src = img_src.flatten(2).permute(2, 0, 1)   # Left shape: (NHW, B, C)

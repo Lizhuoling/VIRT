@@ -74,7 +74,6 @@ def replay_onecase(task_name, h5py_path):
     last_time = time.time()
     ctrl_min_time = 0.05
     action_idx = 0
-
     while action_idx < actions.shape[0]:
         cur_time = time.time()
         if cur_time - last_time >= ctrl_min_time:
@@ -88,7 +87,6 @@ def replay_onecase(task_name, h5py_path):
             action = torch.Tensor(actions[action_idx : action_idx + 1]).to(isaac_env.pos_action.device) # Left shape: (1, 9)
             update_pos_action(isaac_env, action)
             isaac_env.update_action_map()
-            #isaac_env.gym.set_dof_position_target_tensor(isaac_env.sim, gymtorch.unwrap_tensor(action))
             action_idx += 1
         isaac_env.update_simulator_after_ctrl()
 
@@ -180,6 +178,6 @@ def get_isaac_fixedboxes_reward(isaac_env):
     return reward
 
 if __name__ == '__main__':
-    replay(task_name = 'isaac_fixedboxes', root_path = '/home/cvte/twilight/data/isaac_fixedboxes/h5py', start_idx = 18)
+    replay(task_name = 'isaac_singlebox', root_path = '/home/cvte/twilight/data/sim_isaac_singlebox/h5py', start_idx = 0)
 
-    #print(replay_onecase(task_name = 'isaac_fixedboxes', h5py_path = '/home/cvte/twilight/data/isaac_fixedboxes/h5py/episode_15.hdf5'))
+    #print(replay_onecase(task_name = 'isaac_singlebox', h5py_path = '/home/cvte/twilight/data/sim_isaac_singlebox/h5py/episode_28.hdf5'))
