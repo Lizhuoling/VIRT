@@ -1,7 +1,7 @@
 conda create -n aloha python=3.9
 conda activate aloha
 
-pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 -f https://download.pytorch.org/whl/torch_stable.html
+pip install torch==2.3.1+cu121 torchvision==0.18.1+cu121 -f https://download.pytorch.org/whl/torch_stable.html
 
 pip install pyquaternion -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install pyyaml -i https://pypi.tuna.tsinghua.edu.cn/simple
@@ -16,6 +16,7 @@ pip install packaging -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install h5py -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install ipython -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install numpy==1.26.4 -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip3 install -U xformers --index-url https://download.pytorch.org/whl/cu121  -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install transformers
 cd detr && pip install -e . && cd ..
 

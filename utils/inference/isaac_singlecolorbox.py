@@ -7,9 +7,9 @@ import cv2
 import torch
 from torchvision.transforms import functional as F
 
-from isaac_gym.gripper_singlebox import GripperSingleBox
+from isaac_gym.gripper_singlecolorbox import GripperSingleColorBox
 
-class IsaacSingleBoxTestEnviManager():
+class IsaacSingleColorBoxTestEnviManager():
     def __init__(self, cfg, policy, stats):
         self.cfg = cfg
         self.policy = policy
@@ -26,9 +26,9 @@ class IsaacSingleBoxTestEnviManager():
             envi_start_idx = 0
             for batch_idx in range(self.cfg['EVAL']['TEST_ENVI_BATCH_NUM']):
                 print("Start inference batch {}...".format(batch_idx))
-                isaac_envi = GripperSingleBox(num_envs = self.num_envi_per_batch_list[batch_idx])
-                #print(isaac_envi.task_instruction)
-
+                isaac_envi = GripperSingleColorBox(num_envs = self.num_envi_per_batch_list[batch_idx])
+                print(isaac_envi.task_instruction)
+                
                 # Init the envi for one second
                 init_start_time = time.time()
                 while time.time() - init_start_time <= 1:
@@ -200,13 +200,13 @@ class IsaacSingleBoxTestEnviManager():
 
     def get_reward(self, isaac_envi):
         box_idx_list = []
-        for box_idx_dict in isaac_envi.box_idxs:
-            box_idx_list.append(box_idx_dict['red'])
+        for task_instruction, box_idxs in zip(isaac_envi.task_instruction, isaac_envi.box_idxs):
+            box_key = task_instruction
+            box_idx_list.append(box_idxs[box_key])
 
         box_xyz = isaac_envi.rb_states[box_idx_list, :3]  # Left shape: (num_env, 3)
 
         reward = torch.zeros((box_xyz.shape[0]), dtype = torch.float32).to(box_xyz.device)
         reward_mask = (box_xyz[:, 0] > 0.39) & (box_xyz[:, 0] < 0.61) & (box_xyz[:, 1] > -0.26) & (box_xyz[:, 1] < -0.14)
         reward[reward_mask] += 1
-        
         return reward

@@ -1,43 +1,48 @@
 __BASE__: "Base.yaml"
 
-TASK_NAME: 'isaac_singlebox'
+TASK_NAME: 'isaac_fiveboxred'
 ONSCREEN_RENDER: True
 
 POLICY:
   POLICY_NAME: "IsaacGripper_ACT"
   CHUNK_SIZE: 40
   STATE_DIM: 9
-  ENC_LAYERS: 1
-  DEC_LAYERS: 6
+  ENC_LAYERS: 0
+  DEC_LAYERS: 3
   USE_UNCERTAINTY: False
   UNCERTAINTY_RANGE: [-10, 10]
   USE_VAE: False
   USE_CLIP: True
+  KL_WEIGHT: 50
   CLIP_PATH: "/home/cvte/twilight/home/data/ckpts/CLIP_ckpts"
+  EXTERNAL_DET: "COLOR_FILTER"
 
 TRAIN:
   NUM_ITERATIONS: 100000
+  LOG_INTERVAL: 100
   SAVE_CHECKPOINT_INTERVAL: 1000
   BATCH_SIZE: 64
   LR: 0.00001
   LR_BACKBONE: 0.00001
+  DECAY_LR_ITER_STEPS: []
   DATA_SAMPLE_MODE: 'sequence'
-  USE_VELOCITY_LOSS_WEIGHT: True
-  USE_GRIPPER_LOSS_WEIGHT: True
+  USE_VELOCITY_LOSS_WEIGHT: False
+  USE_GRIPPER_LOSS_WEIGHT: False
 
 EVAL:
   DATA_EVAL_RATIO: 0.0
-  INFERENCE_MAX_TIME: 15
+  INFERENCE_MAX_TIME: 20
   TEST_ENVI_NUM: 20
-  TEST_ENVI_BATCH_NUM: 4
+  TEST_ENVI_BATCH_NUM: 20
   TEST_EXECUTION_INTERVAL: 0.05
 
 DATA:
-  CAMERA_NAMES: ['exterior_camera1', 'exterior_camera2', 'top_camera', 'wrist_camera']
+  CAMERA_NAMES: ['exterior_camera1', 'wrist_camera']
+  IMG_RESIZE_SHAPE: [320, 240]
   INPUT_KEYS: ['past_action', 'observations/end_observation', 'observations/joint_observation', 'task_instruction']
   NORM_KEYS: ['action', 'observations/end_observation', 'observations/joint_observation']
-  PAST_OBSERVATION_LEN: 10
+  PAST_OBSERVATION_LEN: 1
   OBSERVATION_SAMPLE_INTERVAL: 10
-  PAST_ACTION_LEN: 20
+  PAST_ACTION_LEN: 1
   PAST_ACTION_SAMPLE_INTERVAL: 10
   FRANKA_XYZ_RANGE: [0.2, 0.8, -0.5, 0.5, 0.4, 0.8] # [x_min, x_max, y_min, y_max, z_min, z_max]

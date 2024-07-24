@@ -15,6 +15,7 @@ from typing import Dict, List
 from detr.util.misc import NestedTensor, is_main_process
 
 from .position_encoding import build_position_encoding
+from .dinov2 import DINOv2
 
 import IPython
 e = IPython.embed
@@ -90,9 +91,7 @@ class Backbone(BackboneBase):
                  train_backbone: bool,
                  return_interm_layers: bool,
                  dilation: bool):
-        backbone = getattr(torchvision.models, name)(
-            replace_stride_with_dilation=[False, False, dilation],
-            pretrained=is_main_process(), norm_layer=FrozenBatchNorm2d) # pretrained # TODO do we want frozen batch_norm??
+        backbone = getattr(torchvision.models, name)(replace_stride_with_dilation=[False, False, dilation], pretrained=is_main_process(), norm_layer=FrozenBatchNorm2d) # pretrained # TODO do we want frozen batch_norm??
         num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
         super().__init__(backbone, train_backbone, num_channels, return_interm_layers)
 
@@ -114,10 +113,16 @@ class Joiner(nn.Sequential):
 
 
 def build_backbone(cfg):
-    position_embedding = build_position_encoding(cfg)
-    train_backbone = cfg['TRAIN']['LR_BACKBONE'] > 0
-    return_interm_layers = False
-    backbone = Backbone(cfg["POLICY"]["BACKBONE"], train_backbone, return_interm_layers, False)
-    model = Joiner(backbone, position_embedding)
-    model.num_channels = backbone.num_channels
+    if cfg['POLICY']['BACKBONE'] == 'resnet18':
+        position_embedding = build_position_encoding(cfg)
+        train_backbone = cfg['TRAIN']['LR_BACKBONE'] > 0
+        return_interm_layers = False
+        backbone = Backbone(cfg["POLICY"]["BACKBONE"], train_backbone, return_interm_layers, False)
+        model = Joiner(backbone, position_embedding)
+        model.num_channels = backbone.num_channels
+    elif cfg['POLICY']['BACKBONE'] == 'dinov2_s':
+        model = DINOv2('vits')
+        pretrained_ckpt_path = '/home/cvte/.cache/torch/hub/checkpoints/dinov2_vits14_pretrain.pth'
+        weight = torch.load(pretrained_ckpt_path)
+        model.load_state_dict(weight)
     return model

@@ -1,7 +1,7 @@
 from isaacgym import gymapi
 from isaacgym import gymutil
 from isaacgym import gymtorch
-from isaacgym.torch_utils import *
+from isaacgym.torch_utils import quat_rotate, quat_conjugate, quat_mul
 
 import numpy as np
 import os
@@ -135,12 +135,23 @@ def eval_bc(cfg, ckpt_path, save_episode=True):
     with open(stats_path, 'rb') as f:
         stats = pickle.load(f)
 
-    if cfg['TASK_NAME'] == 'isaac_gripper':
-        from utils.inference.isaac_gripper import IsaacGripperTestEnviManager
-        envi_manager = IsaacGripperTestEnviManager(cfg, policy, stats)
+    if cfg['TASK_NAME'] == 'isaac_multicolorbox':
+        from utils.inference.isaac_multicolorbox import IsaacMultiColorBoxTestEnviManager
+        envi_manager = IsaacMultiColorBoxTestEnviManager(cfg, policy, stats)
     elif cfg['TASK_NAME'] == 'isaac_singlebox':
         from utils.inference.isaac_singlebox import IsaacSingleBoxTestEnviManager
         envi_manager = IsaacSingleBoxTestEnviManager(cfg, policy, stats)
+    elif cfg['TASK_NAME'] == 'isaac_singlecolorbox':
+        from utils.inference.isaac_singlecolorbox import IsaacSingleColorBoxTestEnviManager
+        envi_manager = IsaacSingleColorBoxTestEnviManager(cfg, policy, stats)
+    elif cfg['TASK_NAME'] == 'isaac_twoboxred':
+        from utils.inference.isaac_twoboxred import IsaacTwoBoxRedTestEnviManager
+        envi_manager = IsaacTwoBoxRedTestEnviManager(cfg, policy, stats)
+    elif cfg['TASK_NAME'] == 'isaac_fiveboxred':
+        from utils.inference.isaac_fiveboxred import IsaacFiveBoxRedTestEnviManager
+        envi_manager = IsaacFiveBoxRedTestEnviManager(cfg, policy, stats)
+    else:
+        raise NotImplementedError
 
     reward_info = envi_manager.inference()
 
@@ -311,7 +322,7 @@ if __name__ == '__main__':
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--save_dir', action='store', type=str, help='saving directory', required=True)
     parser.add_argument('--load_dir', action='store', type=str, default = '', help='The path to weight',)
-    parser.add_argument('--data_dir', action='store', type=str, help='dataset folder path', required=True)
+    parser.add_argument('--data_dir', action='store', type=str, help='dataset folder path')
     parser.add_argument('--real_robot', action='store_true')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--save_episode', action='store_true')

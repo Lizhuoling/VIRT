@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 from itertools import combinations
 import argparse
 
-class GripperSingleBox():
+class GripperMultiColorBox():
     def __init__(self, num_envs = 1, seed = None):
         self.num_envs = num_envs
 
@@ -166,9 +166,9 @@ class GripperSingleBox():
         container_right_asset  = self.gym.create_box(self.sim, container_right_dims.x, container_right_dims.y, container_right_dims.z, asset_options)
 
         # create box asset
-        self.box_size = 0.045
+        box_size = 0.045
         asset_options = gymapi.AssetOptions()
-        box_asset = self.gym.create_box(self.sim, self.box_size, self.box_size, self.box_size, asset_options)
+        box_asset = self.gym.create_box(self.sim, box_size, box_size, box_size, asset_options)
             
         # load franka asset
         asset_root = "/home/cvte/Documents/isaacgym/assets"
@@ -241,12 +241,11 @@ class GripperSingleBox():
         container_right_pose.p  = gymapi.Vec3(container_bottom_pose.p.x + container_right_pose_offset.x, 
                                             container_bottom_pose.p.y + container_right_pose_offset.y,
                                             container_bottom_pose.p.z + container_right_pose_offset.z)
-        
         self.table_dims = table_dims
         self.container_bottom_pose = container_bottom_pose
 
         boxes_pose = []
-        box_num = 1
+        box_num = 5
         for i in range(box_num):
             boxes_pose.append(gymapi.Transform())
 
@@ -259,7 +258,7 @@ class GripperSingleBox():
         plane_params = gymapi.PlaneParams()
         plane_params.normal = gymapi.Vec3(0, 0, 1)
         self.gym.add_ground(self.sim, plane_params)
-        
+
         for i in range(num_envs):
             # create env
             env = self.gym.create_env(self.sim, env_lower, env_upper, num_per_row)
@@ -278,18 +277,27 @@ class GripperSingleBox():
                 self.gym.set_rigid_body_color(env, container_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, gymapi.Vec3(np.array(0), np.array(0.6), np.array(0)))
 
             # add box
-            stack_groups = []
-            for cnt, box_pose in enumerate(boxes_pose):
-                box_pose.p.x = table_pose.p.x + np.random.uniform(-0.15, 0.05)
-                box_pose.p.y = table_pose.p.y + np.random.uniform(0.05, 0.3)
-                box_pose.p.z = table_dims.z + 0.5 * self.box_size
-                stack_groups.append([[box_pose, cnt]])
-            
+            rerange_flag = True
+            while rerange_flag:
+                stack_groups = []
+                for cnt, box_pose in enumerate(boxes_pose):
+                    box_pose.p.x = table_pose.p.x + np.random.uniform(-0.15, 0.05)
+                    box_pose.p.y = table_pose.p.y + np.random.uniform(0.05, 0.3)
+                    box_pose.p.z = table_dims.z + 0.5 * box_size
+                    stack_groups.append([[box_pose, cnt]])
+                rerange_flag = False
+                for p1, p2, in combinations(boxes_pose, 2):
+                    if (np.sum(np.square(np.array([p1.p.x - p2.p.x, p1.p.y - p2.p.y]))) < 2 * (box_size + 0.013) ** 2):
+                        rerange_flag = True
+                        break
             box_handles = [self.gym.create_actor(env, box_asset, box_pose, "box{}".format(box_cnt), i, 0) for box_cnt, box_pose in enumerate(boxes_pose)]
             box_colors = {
                 'red': gymapi.Vec3(1, 0, 0),
+                'green': gymapi.Vec3(0, 1, 0),
+                'blue': gymapi.Vec3(0, 0, 1),
+                'yellow': gymapi.Vec3(1, 1, 0),
+                'purple': gymapi.Vec3(1, 0, 1),
             }
-            
             assert len(box_handles) == len(box_colors)
             env_box_idxs_dict = {}
             for box_color, box_handle in zip(box_colors, box_handles):
@@ -299,23 +307,26 @@ class GripperSingleBox():
             self.box_idxs.append(env_box_idxs_dict)
 
             # add franka
-            self.franka_handle = self.gym.create_actor(env, franka_asset, franka_pose, "franka", i, 2)
+            franka_handle = self.gym.create_actor(env, franka_asset, franka_pose, "franka", i, 2)
 
             # set dof properties
-            self.gym.set_actor_dof_properties(env, self.franka_handle, franka_dof_props)
+            self.gym.set_actor_dof_properties(env, franka_handle, franka_dof_props)
 
             # set initial dof states
-            self.gym.set_actor_dof_states(env, self.franka_handle, default_dof_state, gymapi.STATE_ALL)
+            self.gym.set_actor_dof_states(env, franka_handle, default_dof_state, gymapi.STATE_ALL)
 
             # set initial position targets
-            self.gym.set_actor_dof_position_targets(env, self.franka_handle, default_dof_pos)
+            self.gym.set_actor_dof_position_targets(env, franka_handle, default_dof_pos)
 
             # get global index of hand in rigid body state tensor
-            hand_idx = self.gym.find_actor_rigid_body_index(env, self.franka_handle, "panda_hand", gymapi.DOMAIN_SIM)
+            hand_idx = self.gym.find_actor_rigid_body_index(env, franka_handle, "panda_hand", gymapi.DOMAIN_SIM)
             self.hand_idxs.append(hand_idx)
 
             # Generate language instruction.
-            self.task_instruction.append("Please place the red box in the container.")
+            self.box_sample_ids = random.sample(range(0, box_num), 2)
+            box_color_list = list(box_colors.keys())
+            self.task_instruction.append("Please place the {} box in the container and put the {} box on the {} box."\
+                .format(box_color_list[self.box_sample_ids[0]], box_color_list[self.box_sample_ids[1]], box_color_list[self.box_sample_ids[0]]))
 
         # point camera at middle env
         cam_pos = gymapi.Vec3(4, 3, 2)
@@ -351,11 +362,11 @@ class GripperSingleBox():
             local_transform = gymapi.Transform()
             local_transform.p = gymapi.Vec3(0.1, 0, 0)
             local_transform.r = gymapi.Quat.from_euler_zyx(0, -90, 0)
-            finger_handle = self.gym.find_actor_rigid_body_handle(env, self.franka_handle, "panda_hand")
+            finger_handle = self.gym.find_actor_rigid_body_handle(env, franka_handle, "panda_hand")
             self.gym.attach_camera_to_body(hand_camera, env, finger_handle, local_transform, gymapi.FOLLOW_TRANSFORM)
 
             self.cameras.append(dict(top_camera = top_camera, side_camera1 = side_camera1, side_camera2 = side_camera2, hand_camera = hand_camera))
-        
+
         # ==== prepare tensors =====
         # from now on, we will use the tensor API that can run on CPU or GPU
         self.gym.prepare_sim(self.sim)
@@ -442,7 +453,7 @@ class GripperSingleBox():
 
         self.gym.end_access_image_tensors(self.sim)
         return images_envs
-
+    
     def quat_axis(self, q, axis=0):
         basis_vec = torch.zeros(q.shape[0], 3, device=q.device)
         basis_vec[:, axis] = 1
@@ -466,4 +477,4 @@ class GripperSingleBox():
         self.gym.destroy_sim(self.sim)
 
 if __name__ == '__main__':
-    envi = GripperSingleBox()
+    envi = GripperMultiColorBox()

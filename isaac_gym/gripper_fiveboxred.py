@@ -1,7 +1,7 @@
 from isaacgym import gymapi
 from isaacgym import gymutil
 from isaacgym import gymtorch
-from isaacgym.torch_utils import *
+from isaacgym.torch_utils import quat_rotate, quat_conjugate, quat_mul
 
 import pdb
 import math
@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 from itertools import combinations
 import argparse
 
-class GripperHand():
+class GripperFiveBoxRed():
     def __init__(self, num_envs = 1, seed = None):
         self.num_envs = num_envs
 
@@ -241,6 +241,9 @@ class GripperHand():
         container_right_pose.p  = gymapi.Vec3(container_bottom_pose.p.x + container_right_pose_offset.x, 
                                             container_bottom_pose.p.y + container_right_pose_offset.y,
                                             container_bottom_pose.p.z + container_right_pose_offset.z)
+        
+        self.container_bottom_pose = container_bottom_pose
+        self.table_dims = table_dims
 
         boxes_pose = []
         box_num = 5
@@ -272,7 +275,7 @@ class GripperHand():
             container_left_handle = self.gym.create_actor(env, container_left_asset, container_left_pose, "container_left", i, 0)
             container_right_handle = self.gym.create_actor(env, container_right_asset, container_right_pose, "container_right", i, 0)
             for container_handle in [container_bottom_handle, container_front_handle, container_back_handle, container_left_handle, container_right_handle]:
-                self.gym.set_rigid_body_color(env, container_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, gymapi.Vec3(np.array(0), np.array(0.6), np.array(0)))
+                self.gym.set_rigid_body_color(env, container_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, gymapi.Vec3(np.array(0.2), np.array(0.2), np.array(0.2)))
 
             # add box
             rerange_flag = True
@@ -321,10 +324,7 @@ class GripperHand():
             self.hand_idxs.append(hand_idx)
 
             # Generate language instruction.
-            self.box_sample_ids = random.sample(range(0, box_num), 2)
-            box_color_list = list(box_colors.keys())
-            self.task_instruction.append("Please place the {} box in the container and put the {} box on the {} box."\
-                .format(box_color_list[self.box_sample_ids[0]], box_color_list[self.box_sample_ids[1]], box_color_list[self.box_sample_ids[0]]))
+            self.task_instruction.append("{}".format('red',))
 
         # point camera at middle env
         cam_pos = gymapi.Vec3(4, 3, 2)
@@ -439,6 +439,7 @@ class GripperHand():
 
             vis_frame = np.concatenate((top_bgr_image, side1_bgr_image, side2_bgr_image, hand_bgr_image), axis = 1)
             cv2.imshow('vis', vis_frame)
+            cv2.waitKey(1)
 
             images = dict(
                 top_bgr_image = top_bgr_image,
@@ -474,4 +475,4 @@ class GripperHand():
         self.gym.destroy_sim(self.sim)
 
 if __name__ == '__main__':
-    envi = GripperHand()
+    envi = GripperFiveBoxRed()

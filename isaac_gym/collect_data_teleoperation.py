@@ -1,7 +1,7 @@
 from isaacgym import gymapi
 from isaacgym import gymutil
 from isaacgym import gymtorch
-from isaacgym.torch_utils import *
+from isaacgym.torch_utils import quat_rotate, quat_conjugate, quat_mul
 
 import pdb
 import math
@@ -22,9 +22,10 @@ import matplotlib.pyplot as plt
 from itertools import combinations
 
 import leap_motion
-from gripper_hand import GripperHand
+from isaac_gym.gripper_multicolorbox import GripperMultiColorBox
 from gripper_singlebox import GripperSingleBox
 from gripper_fixedboxes import GripperFixedBoxes
+from gripper_singlecolorbox import GripperSingleColorBox
 
 leap_mode = 'right'
 leap_conf_thre = 0.3
@@ -100,9 +101,9 @@ def update_pos_action(isaac_env, kf = None):
     else:
         filter_action = action
 
-    goal_pos = torch.Tensor([filter_action[:3]]).to(hand_pos.device)
-    goal_rot = torch.Tensor([filter_action[3:7]]).to(hand_rot.device)
-    goal_gripper = torch.Tensor([filter_action[7:]]).to(hand_rot.device) 
+    goal_pos = torch.Tensor(filter_action[:3][None]).to(hand_pos.device)
+    goal_rot = torch.Tensor(filter_action[3:7][None]).to(hand_rot.device)
+    goal_gripper = torch.Tensor(filter_action[7:][None]).to(hand_rot.device) 
     
     pos_err = goal_pos - hand_pos
     orn_err = isaac_env.orientation_error(goal_rot, hand_rot)
@@ -209,12 +210,14 @@ def collect_data_main(task_name, save_data_path = ""):
     leap_connection = leap_motion.leap.Connection()
     leap_connection.add_listener(my_listener)
     
-    if task_name == 'isaac_gripper':
-        isaac_env = GripperHand(num_envs = 1)
+    if task_name == 'isaac_multicolorbox':
+        isaac_env = GripperMultiColorBox(num_envs = 1)
     elif task_name == 'isaac_singlebox':
         isaac_env = GripperSingleBox(num_envs = 1)
     elif task_name == 'isaac_fixedboxes':
         isaac_env = GripperFixedBoxes(num_envs = 1)
+    elif task_name == 'isaac_singlecolorbox':
+        isaac_env = GripperSingleColorBox(num_envs = 1)
     kf = TrajectoryFilter9D()
 
     cnt = 0
@@ -272,11 +275,11 @@ def collect_data_main(task_name, save_data_path = ""):
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    task_name = 'isaac_fixedboxes'
-    save_data_path = '/home/cvte/twilight/data/isaac_fixedboxes'
-    collect_data_main(task_name = task_name, save_data_path = save_data_path)
+    task_name = 'isaac_singlecolorbox'
+    #save_data_path = '/home/cvte/twilight/data/isaac_singlecolorbox'
+    #collect_data_main(task_name = task_name, save_data_path = save_data_path)
 
-    #collect_data_main()
+    collect_data_main(task_name = task_name)
 
     '''save_data_manager = SaveDataManager(save_data_path)
     action_list = [np.zeros((7, ), dtype = np.float32)]

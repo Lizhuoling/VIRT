@@ -28,12 +28,12 @@ HF_TOKEN = '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'
 
 
 # HF仓库
-repo_id = 'openai/clip-vit-base-patch32'
+repo_id = 'facebook/dinov2-small'
 # 下载数据集/模型
 # repo_type = "dataset"
 repo_type = "model"
 # 本地的下载路径
-local_dir = "/home/cvte/twilight/home/data/ckpts/CLIP_ckpts"
+local_dir = "/home/cvte/twilight/home/data/ckpts/dinov2_small"
 # 本地的缓存路径
 cache_dir = "{0}/cache".format(local_dir)
 

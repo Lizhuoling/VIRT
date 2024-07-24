@@ -10,6 +10,7 @@ from transformers import AutoTokenizer, CLIPTextModelWithProjection
 
 from .backbone import build_backbone
 from .transformer import build_transformer, TransformerEncoder, TransformerEncoderLayer
+from utils.models.external_detector import ColorFilterDetector
 
 import numpy as np
 
@@ -53,6 +54,7 @@ class IsaacGripperDETR(nn.Module):
         self.transformer = transformer
         self.encoder = encoder  # VAE encoder
         hidden_dim = transformer.d_model
+        self.hidden_dim = hidden_dim
         self.query_embed = nn.Embedding(chunk_size, hidden_dim)
         self.action_head = nn.Linear(hidden_dim, state_dim) # Decode transformer output as action.
         if self.cfg['POLICY']['USE_UNCERTAINTY']:
@@ -69,7 +71,12 @@ class IsaacGripperDETR(nn.Module):
             self.vae_pos_embed = nn.Embedding(1, hidden_dim) # learned position embedding for vae mu and std
 
         # Camera image feature extraction.
-        self.input_proj = nn.Conv2d(backbones[0].num_channels, hidden_dim, kernel_size=1)
+        if self.cfg['POLICY']['BACKBONE'] == 'resnet18':
+            self.input_proj = nn.Conv2d(backbones[0].num_channels, hidden_dim, kernel_size=1)
+        elif self.cfg['POLICY']['BACKBONE'] == 'dinov2_s':
+            self.input_proj = nn.Linear(backbones[0].num_features, hidden_dim)
+            img_token_len = self.cfg['DATA']['IMG_RESIZE_SHAPE'][1] * self.cfg['DATA']['IMG_RESIZE_SHAPE'][0] // 14 // 14
+            self.image_pos_embed = nn.Embedding(img_token_len, hidden_dim)
         self.backbones = nn.ModuleList(backbones)
         self.camera_view_pos_embed = nn.Embedding(len(camera_names), hidden_dim)
 
@@ -90,6 +97,15 @@ class IsaacGripperDETR(nn.Module):
             self.clip_text_model = CLIPTextModelWithProjection.from_pretrained(cfg["POLICY"]["CLIP_PATH"])
             self.clip_tokenizer = AutoTokenizer.from_pretrained(cfg["POLICY"]["CLIP_PATH"])
             self.task_instruction_pos_emb = nn.Embedding(1, hidden_dim)
+        
+        if self.cfg["POLICY"]["EXTERNAL_DET"] == 'COLOR_FILTER':
+            self.object_detector = ColorFilterDetector(cfg)
+            self.obj_box_mlp = nn.Linear(4 * len(cfg['DATA']['CAMERA_NAMES']), hidden_dim)
+            self.obj_box_pos_emb = nn.Embedding(1, hidden_dim)
+        elif self.cfg["POLICY"]["EXTERNAL_DET"] == 'None':
+            pass
+        else:
+            raise NotImplementedError
 
     def forward(self, image, past_action, end_obs, joint_obs, env_state, action = None, observation_is_pad = None, past_action_is_pad = None, action_is_pad = None, task_instruction_list = None):
         """
@@ -104,11 +120,17 @@ class IsaacGripperDETR(nn.Module):
         """
         is_training = action is not None # train or val
         bs, num_cam, in_c, in_h, in_w = image.shape
-
+        
         if self.cfg["POLICY"]["USE_CLIP"]:
             text_tokens = self.clip_tokenizer(task_instruction_list, padding=True, return_tensors="pt").to(image.device)
             with torch.no_grad():
-                task_instruction_emb = self.clip_text_model(**text_tokens).text_embeds.detach()  # Left shape: (B, clip_text_len)
+                task_instruction_emb = self.clip_text_model(**text_tokens).text_embeds.detach()  # Left shape: (bs, clip_text_len)
+
+        if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
+            obj_boxes = self.object_detector(image, task_instruction_list)  # Lefty shape: (bs, num_cam, 4)
+            obj_box_src = self.obj_box_mlp(obj_boxes.view(bs, -1))[None]  # Left shape: (1, bs, C)
+            obj_box_pos = self.obj_box_pos_emb.weight[:, None, :].expand(-1, bs, -1)    # Left shape: (1, bs, C)
+            obj_box_mask = torch.zeros((bs, 1), dtype=torch.bool).to(image.device)  # Left shape: (bs, 1)
 
         ### Obtain latent z from action sequence
         if self.cfg['POLICY']['USE_VAE'] and is_training: # VAE encoder
@@ -145,15 +167,35 @@ class IsaacGripperDETR(nn.Module):
         
         # Image observation features and position embeddings
         image = image.view(bs * num_cam, in_c, in_h, in_w)  # Left shape: (bs * num_cam, C, H, W)
-        features, pos = self.backbones[0](image)
-        features, pos = features[0], pos[0] # features shape: (bs * num_cam, C, H, W), pos shape: (1, C, H, W)
-        features = self.input_proj(features)
-        img_src = features.view(bs, num_cam, -1, features.shape[-2], features.shape[-1]).permute(0, 2, 1, 3, 4)  # Left shape: (B, C, N, H, W)
-        cam_pos = pos.view(1, 1, -1, pos.shape[-2], pos.shape[-1]).permute(0, 2, 1, 3, 4)  # Left shape: (1, C, 1, H, W)
-        camera_view_pos = self.camera_view_pos_embed.weight.permute(1, 0)[None, :, :, None, None]  # (1, C, N, 1, 1)
-        cam_pos = (cam_pos + camera_view_pos).expand(bs, -1, -1, -1, -1)  # (B, C, N, H, W)
-        src = img_src.flatten(2).permute(2, 0, 1)   # Left shape: (NHW, B, C)
-        pos = cam_pos.flatten(2).permute(2, 0, 1)  # Left shape: (NHW, B, C)
+        if self.cfg['POLICY']['BACKBONE'] == 'resnet18':
+            if self.cfg['TRAIN']['LR_BACKBONE'] <= 0:
+                self.backbones[0].eval()
+                with torch.no_grad():
+                    features, pos = self.backbones[0](image)
+            else:
+                features, pos = self.backbones[0](image)
+            features, pos = features[0], pos[0] # features shape: (bs * num_cam, C, H, W), pos shape: (1, C, H, W)
+            features = self.input_proj(features)
+            img_src = features.view(bs, num_cam, -1, features.shape[-2], features.shape[-1]).permute(0, 2, 1, 3, 4)  # Left shape: (B, C, N, H, W)
+            cam_pos = pos.view(1, 1, -1, pos.shape[-2], pos.shape[-1]).permute(0, 2, 1, 3, 4)  # Left shape: (1, C, 1, H, W)
+            camera_view_pos = self.camera_view_pos_embed.weight.permute(1, 0)[None, :, :, None, None]  # (1, C, N, 1, 1)
+            cam_pos = (cam_pos + camera_view_pos).expand(bs, -1, -1, -1, -1)  # (B, C, N, H, W)
+            src = img_src.flatten(2).permute(2, 0, 1)   # Left shape: (NHW, B, C)
+            pos = cam_pos.flatten(2).permute(2, 0, 1)  # Left shape: (NHW, B, C)
+        elif self.cfg['POLICY']['BACKBONE'] == 'dinov2_s':
+            if self.cfg['TRAIN']['LR_BACKBONE'] <= 0:
+                self.backbones[0].eval()
+                with torch.no_grad():
+                    features = self.backbones[0].forward_features(image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, l, C)
+            else:
+                features = self.backbones[0].forward_features(image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, l, C)
+            features = self.input_proj(features)
+            src = features.view(bs, -1, self.hidden_dim).permute(1, 0, 2)   # Left shape: (num_cam * l, B, C)
+            image_pos_embed = self.image_pos_embed.weight[None, None, :, :].expand(bs, num_cam, -1, -1)  # (B, num_cam, l, C)
+            camera_view_pos_embed = self.camera_view_pos_embed.weight[None, :, None, :].expand(bs, -1, -1, -1)  # (B, num_cam, 1, C)
+            pos = (image_pos_embed + camera_view_pos_embed).view(bs, -1, self.hidden_dim).permute(1, 0, 2)  # Left shape: (num_cam * l, B, C)
+        else:
+            raise NotImplementedError
         mask = torch.zeros((bs, src.shape[0]), dtype=torch.bool).to(image.device)   # Left shape: (B, NHW)
 
         # proprioception features
@@ -186,6 +228,10 @@ class IsaacGripperDETR(nn.Module):
             src = torch.cat((src, task_instruction_src), dim = 0)  # Left shape: (L, B, C)
             pos = torch.cat((pos, task_instruction_pos), dim = 0)  # Left shape: (L, B, C)
             mask = torch.cat((mask, task_instruction_mask), dim = 1) # Left shape: (B, L)
+        if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
+            src = torch.cat((src, obj_box_src), dim = 0)  # Left shape: (L, B, C)
+            pos = torch.cat((pos, obj_box_pos), dim = 0)  # Left shape: (L, B, C)
+            mask = torch.cat((mask, obj_box_mask), dim = 1) # Left shape: (B, L)
     
         query_emb = self.query_embed.weight.unsqueeze(1).repeat(1, bs, 1)   # Left shape: (num_query, B, C)
         hs = self.transformer(src, mask, query_emb, pos) # Left shape: (num_dec, B, num_query, C)

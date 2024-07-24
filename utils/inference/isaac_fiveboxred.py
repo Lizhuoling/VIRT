@@ -7,9 +7,9 @@ import cv2
 import torch
 from torchvision.transforms import functional as F
 
-from isaac_gym.gripper_hand import GripperHand
+from isaac_gym.gripper_fiveboxred import GripperFiveBoxRed
 
-class IsaacGripperTestEnviManager():
+class IsaacFiveBoxRedTestEnviManager():
     def __init__(self, cfg, policy, stats):
         self.cfg = cfg
         self.policy = policy
@@ -21,23 +21,32 @@ class IsaacGripperTestEnviManager():
 
     def inference(self,):
         rewards = np.zeros((self.cfg['EVAL']['TEST_ENVI_NUM'],), dtype = np.float32)
+
         with torch.no_grad():
             envi_start_idx = 0
             for batch_idx in range(self.cfg['EVAL']['TEST_ENVI_BATCH_NUM']):
                 print("Start inference batch {}...".format(batch_idx))
-                isaac_envi = GripperHand(num_envs = self.num_envi_per_batch_list[batch_idx])
+                isaac_envi = GripperFiveBoxRed(num_envs = self.num_envi_per_batch_list[batch_idx])
                 print(isaac_envi.task_instruction)
+                
+                # Init the envi for one second
+                init_start_time = time.time()
+                while time.time() - init_start_time <= 1:
+                    isaac_envi.update_simulator_before_ctrl()
+                    isaac_envi.update_simulator_after_ctrl()
 
                 enb_obs_list = []
                 joint_obs_list = []
                 action_list = []
 
                 start_time = time.time()
-                last_time = start_time
+                sim_pass_time = 0
+                sim_end_time, sim_start_time = start_time, start_time
                 actions_pred = None
                 execution_step = 0
                 while time.time() - start_time <= self.cfg['EVAL']['INFERENCE_MAX_TIME']:
                     isaac_envi.update_simulator_before_ctrl()
+                    sim_end_time = time.time()
 
                     if actions_pred == None or execution_step >= actions_pred.shape[1]:
                         if len(action_list) == 0:
@@ -53,8 +62,9 @@ class IsaacGripperTestEnviManager():
                         actions_pred = norm_actions_pred * action_std + action_mean
                         execution_step = 0
                         
-                    cur_time = time.time()
-                    if cur_time - last_time >= self.cfg['EVAL']['TEST_EXECUTION_INTERVAL']:
+                    sim_pass_time += sim_end_time - sim_start_time
+                    sim_start_time = time.time()
+                    if sim_pass_time >= self.cfg['EVAL']['TEST_EXECUTION_INTERVAL']:
                         # Save observation data
                         norm_end_observation, norm_joint_observation, all_cam_images = self.get_observation(isaac_envi)
                         enb_obs_list.append(norm_end_observation)
@@ -65,7 +75,7 @@ class IsaacGripperTestEnviManager():
                         self.execute_action(action, isaac_envi)
                         isaac_envi.update_action_map()
                         execution_step += 1
-                        last_time = cur_time
+                        sim_pass_time = 0
 
                     isaac_envi.update_simulator_after_ctrl()
 
@@ -76,19 +86,15 @@ class IsaacGripperTestEnviManager():
         
         reward0_ratio = (rewards == 0).sum() / rewards.shape[0]
         reward1_ratio = (rewards == 1).sum() / rewards.shape[0]
-        reward2_ratio = (rewards == 2).sum() / rewards.shape[0]
-        reward3_ratio = (rewards == 3).sum() / rewards.shape[0]
-        success_rate = reward3_ratio
+        success_rate = reward1_ratio
         average_reward = np.mean(rewards)
         reward_info = dict(
             reward0_ratio = reward0_ratio,
             reward1_ratio = reward1_ratio,
-            reward2_ratio = reward2_ratio,
-            reward3_ratio = reward3_ratio,
             success_rate = success_rate,
             average_reward = average_reward
         )
-        print(f'\nreward0_ratio: {reward0_ratio}\nreward1_ratio: {reward1_ratio}\nreward2_ratio: {reward2_ratio}\nreward3_ratio: {reward3_ratio}')
+        print(f'\nreward0_ratio: {reward0_ratio}\nreward1_ratio: {reward1_ratio}\n')
         return reward_info
         
 
@@ -107,7 +113,7 @@ class IsaacGripperTestEnviManager():
             top_rgb_image = isaac_envi.gym.get_camera_image(isaac_envi.sim, env, isaac_envi.cameras[cnt]['top_camera'], gymapi.IMAGE_COLOR)
             top_rgb_image = top_rgb_image.reshape(240, 320, 4)[:, :, :3]
             env_image_dict['top_camera'] = top_rgb_image
-            
+
             side1_rgb_image = isaac_envi.gym.get_camera_image(isaac_envi.sim, env, isaac_envi.cameras[cnt]['side_camera1'], gymapi.IMAGE_COLOR)
             side1_rgb_image = side1_rgb_image.reshape(240, 320, 4)[:, :, :3]
             env_image_dict['exterior_camera1'] = side1_rgb_image
@@ -120,16 +126,21 @@ class IsaacGripperTestEnviManager():
             hand_rgb_image = hand_rgb_image.reshape(240, 320, 4)[:, :, :3]
             env_image_dict['wrist_camera'] = hand_rgb_image
             images.append(env_image_dict)
+
         all_cam_image_list = []
         for camera_name in self.cfg['DATA']['CAMERA_NAMES']:
             single_camera_images = np.stack([ele[camera_name] for ele in images], axis = 0)   # Left shape: (num_envi, H, W, C)
             all_cam_image_list.append(single_camera_images)
+        
         all_cam_images = np.stack(all_cam_image_list, axis = 0)   # Left shape: (num_camera, num_envi, H, W, C)
         all_cam_images = all_cam_images.transpose(1, 0, 4, 2, 3)     # Left shape: (num_envi, num_camera, C, H, W)
         num_envi, num_cam, C, H, W = all_cam_images.shape
         all_cam_images = torch.from_numpy(all_cam_images).float().reshape(num_envi * num_cam, C, H, W).cuda()
+        all_cam_images = all_cam_images.float() / 255
+        resize_w, resize_h = self.cfg['DATA']['IMG_RESIZE_SHAPE'][0], self.cfg['DATA']['IMG_RESIZE_SHAPE'][1]
+        all_cam_images = F.resize(all_cam_images, size=(resize_h, resize_w))
         all_cam_images = F.normalize(all_cam_images, mean=self.cfg['DATA']['IMG_NORM_MEAN'], std=self.cfg['DATA']['IMG_NORM_STD'])  # Left shape: (num_envi * num_camera, C, H, W)
-        all_cam_images = all_cam_images.view(num_envi, num_cam, C, H, W)
+        all_cam_images = all_cam_images.view(num_envi, num_cam, C, resize_h, resize_w)
         
         return norm_end_observation, norm_joint_observation, all_cam_images
     
@@ -188,22 +199,14 @@ class IsaacGripperTestEnviManager():
         isaac_envi.pos_action[:, 7:] = goal_gripper
 
     def get_reward(self, isaac_envi):
-        task_instruction_list = isaac_envi.task_instruction
-        box1_idx_list, box2_idx_list = [], []
-        for box_idx_dict, task_instruction in zip(isaac_envi.box_idxs, task_instruction_list):
-            task_instruction = task_instruction.split(' ')
-            box1_idx_list.append(box_idx_dict[task_instruction[3]])
-            box2_idx_list.append(box_idx_dict[task_instruction[11]])
+        box_idx_list = []
+        for task_instruction, box_idxs in zip(isaac_envi.task_instruction, isaac_envi.box_idxs):
+            box_key = 'red'
+            box_idx_list.append(box_idxs[box_key])
 
-        box1_xyz = isaac_envi.rb_states[box1_idx_list, :3]  # Left shape: (num_env, 3)
-        box2_xyz = isaac_envi.rb_states[box2_idx_list, :3]  # Left shape: (num_env, 3)
+        box_xyz = isaac_envi.rb_states[box_idx_list, :3]  # Left shape: (num_env, 3)
 
-        reward = torch.zeros((box1_xyz.shape[0]), dtype = torch.float32).to(box1_xyz.device)
-        reward1_mask = (box1_xyz[:, 0] > 0.39) & (box1_xyz[:, 0] < 0.61) & (box1_xyz[:, 1] > -0.26) & (box1_xyz[:, 1] < -0.14)
-        reward[reward1_mask] += 1
-        reward2_mask = reward1_mask & (box2_xyz[:, 0] > 0.39) & (box2_xyz[:, 0] < 0.61) & (box2_xyz[:, 1] > -0.26) & (box2_xyz[:, 1] < -0.14)
-        reward[reward2_mask] += 1
-        reward3_mask = reward2_mask & (torch.norm(box1_xyz[:, 0:2] - box2_xyz[:, 0:2], dim = 1) < 0.032) & (box1_xyz[:, 2] - box1_xyz[:, 2] > 0.022)
-        reward[reward3_mask] += 1
-        
+        reward = torch.zeros((box_xyz.shape[0]), dtype = torch.float32).to(box_xyz.device)
+        reward_mask = (box_xyz[:, 0] > 0.39) & (box_xyz[:, 0] < 0.61) & (box_xyz[:, 1] > -0.26) & (box_xyz[:, 1] < -0.14)
+        reward[reward_mask] += 1
         return reward

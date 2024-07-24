@@ -1,5 +1,5 @@
-exp_id=sim_isaac_singlebox_vae_chunk300
-config_name=isaac_singlebox_vae_chunk300
+exp_id=sim_isaac_fiveboxred_det
+config_name=isaac_fiveboxred_det
 
 nnodes=1
 nproc_per_node=1
@@ -11,9 +11,8 @@ CUDA_VISIBLE_DEVICES=0 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_nod
     imitate_episodes.py \
     --config_name $config_name \
     --save_dir ./outputs/$exp_id \
-    --data_dir ./datasets/isaac_singlebox \
+    --load_dir outputs/sim_isaac_fiveboxred_det/policy_latest.ckpt \
     --num_nodes $nnodes \
     --eval \
-    #--load_dir outputs/isaac_singlebox_novae/policy_latest.ckpt \
     #--save_episode \
     #--debug \

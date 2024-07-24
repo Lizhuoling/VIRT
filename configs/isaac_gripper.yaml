@@ -1,6 +1,6 @@
 __BASE__: "Base.yaml"
 
-TASK_NAME: 'isaac_singlebox'
+TASK_NAME: 'isaac_multicolorbox'
 ONSCREEN_RENDER: True
 
 POLICY:
@@ -8,32 +8,35 @@ POLICY:
   CHUNK_SIZE: 40
   STATE_DIM: 9
   ENC_LAYERS: 1
-  DEC_LAYERS: 6
+  DEC_LAYERS: 3
   USE_UNCERTAINTY: False
   UNCERTAINTY_RANGE: [-10, 10]
   USE_VAE: False
   USE_CLIP: True
+  KL_WEIGHT: 100
   CLIP_PATH: "/home/cvte/twilight/home/data/ckpts/CLIP_ckpts"
 
 TRAIN:
   NUM_ITERATIONS: 100000
+  LOG_INTERVAL: 100
   SAVE_CHECKPOINT_INTERVAL: 1000
   BATCH_SIZE: 64
   LR: 0.00001
   LR_BACKBONE: 0.00001
+  DECAY_LR_ITER_STEPS: []
   DATA_SAMPLE_MODE: 'sequence'
   USE_VELOCITY_LOSS_WEIGHT: True
   USE_GRIPPER_LOSS_WEIGHT: True
 
 EVAL:
   DATA_EVAL_RATIO: 0.0
-  INFERENCE_MAX_TIME: 15
+  INFERENCE_MAX_TIME: 30
   TEST_ENVI_NUM: 20
-  TEST_ENVI_BATCH_NUM: 4
+  TEST_ENVI_BATCH_NUM: 20
   TEST_EXECUTION_INTERVAL: 0.05
 
 DATA:
-  CAMERA_NAMES: ['exterior_camera1', 'exterior_camera2', 'top_camera', 'wrist_camera']
+  CAMERA_NAMES: ['exterior_camera1', 'wrist_camera']
   INPUT_KEYS: ['past_action', 'observations/end_observation', 'observations/joint_observation', 'task_instruction']
   NORM_KEYS: ['action', 'observations/end_observation', 'observations/joint_observation']
   PAST_OBSERVATION_LEN: 10

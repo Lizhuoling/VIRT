@@ -76,7 +76,7 @@ def load_data(cfg):
         if data_eval_ratio > 0:
             val_transforms = build_ACTTransforms(cfg, is_train = False)
             val_dataset = ACTDataset(cfg, transforms = val_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = val_indices, is_train = False)
-    elif cfg['TASK_NAME'] in ['isaac_gripper', 'isaac_singlebox']:
+    elif cfg['TASK_NAME'] in ['isaac_multicolorbox', 'isaac_singlebox', 'isaac_singlecolorbox', 'isaac_twoboxred', 'isaac_fiveboxred']:
         train_transforms = build_IsaacGripperTransforms(cfg, is_train = True)
         train_dataset = IsaacGripperDataset(cfg, transforms = train_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = train_indices, is_train = True)
         if data_eval_ratio > 0:
