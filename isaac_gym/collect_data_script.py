@@ -157,6 +157,7 @@ def collect_data_main(task_name, save_data_path = "", total_data_num = 1):
 
         isaac_env.update_simulator_after_ctrl()
         images_envs = isaac_env.visualization_process()
+        cv2.waitKey(1)
         assert len(images_envs) ==  1
         images = images_envs[0]
         
@@ -184,8 +185,8 @@ def collect_data_main(task_name, save_data_path = "", total_data_num = 1):
     print("Done!")
 
 if __name__ == '__main__':
-    task_name = 'isaac_fiveboxred'
-    save_data_path = '/home/cvte/twilight/data/sim_isaac_fiveboxred'
-    collect_data_main(task_name = task_name, save_data_path = save_data_path, total_data_num = 50)
+    task_name = 'isaac_singlecolorbox'
+    save_data_path = '/home/cvte/twilight/data/sim_isaac_singlecolorbox'
+    collect_data_main(task_name = task_name, save_data_path = save_data_path, total_data_num = 150)
 
     #collect_data_main(task_name = task_name, total_data_num = 300)

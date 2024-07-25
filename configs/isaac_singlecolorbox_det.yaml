@@ -1,6 +1,6 @@
 __BASE__: "Base.yaml"
 
-TASK_NAME: 'isaac_fiveboxred'
+TASK_NAME: 'isaac_singlecolorbox'
 ONSCREEN_RENDER: True
 
 POLICY:
@@ -9,6 +9,7 @@ POLICY:
   STATE_DIM: 9
   ENC_LAYERS: 0
   DEC_LAYERS: 3
+  OUTPUT_MODE: 'relative'
   USE_UNCERTAINTY: False
   UNCERTAINTY_RANGE: [-10, 10]
   USE_VAE: False

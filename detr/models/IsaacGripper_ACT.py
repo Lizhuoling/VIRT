@@ -78,7 +78,6 @@ class IsaacGripperDETR(nn.Module):
             img_token_len = self.cfg['DATA']['IMG_RESIZE_SHAPE'][1] * self.cfg['DATA']['IMG_RESIZE_SHAPE'][0] // 14 // 14
             self.image_pos_embed = nn.Embedding(img_token_len, hidden_dim)
         self.backbones = nn.ModuleList(backbones)
-        self.camera_view_pos_embed = nn.Embedding(len(camera_names), hidden_dim)
 
         # Proprioception information encoding.
         if 'past_action' in self.cfg['DATA']['INPUT_KEYS']:
@@ -96,12 +95,10 @@ class IsaacGripperDETR(nn.Module):
         if self.cfg["POLICY"]["USE_CLIP"]:
             self.clip_text_model = CLIPTextModelWithProjection.from_pretrained(cfg["POLICY"]["CLIP_PATH"])
             self.clip_tokenizer = AutoTokenizer.from_pretrained(cfg["POLICY"]["CLIP_PATH"])
-            self.task_instruction_pos_emb = nn.Embedding(1, hidden_dim)
         
         if self.cfg["POLICY"]["EXTERNAL_DET"] == 'COLOR_FILTER':
             self.object_detector = ColorFilterDetector(cfg)
             self.obj_box_mlp = nn.Linear(4 * len(cfg['DATA']['CAMERA_NAMES']), hidden_dim)
-            self.obj_box_pos_emb = nn.Embedding(1, hidden_dim)
         elif self.cfg["POLICY"]["EXTERNAL_DET"] == 'None':
             pass
         else:
@@ -120,17 +117,12 @@ class IsaacGripperDETR(nn.Module):
         """
         is_training = action is not None # train or val
         bs, num_cam, in_c, in_h, in_w = image.shape
-        
-        if self.cfg["POLICY"]["USE_CLIP"]:
-            text_tokens = self.clip_tokenizer(task_instruction_list, padding=True, return_tensors="pt").to(image.device)
-            with torch.no_grad():
-                task_instruction_emb = self.clip_text_model(**text_tokens).text_embeds.detach()  # Left shape: (bs, clip_text_len)
 
         if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
-            obj_boxes = self.object_detector(image, task_instruction_list)  # Lefty shape: (bs, num_cam, 4)
+            obj_boxes, img_roi = self.object_detector(image, task_instruction_list)  # Lefty shape: (bs, num_cam, 4)
             obj_box_src = self.obj_box_mlp(obj_boxes.view(bs, -1))[None]  # Left shape: (1, bs, C)
-            obj_box_pos = self.obj_box_pos_emb.weight[:, None, :].expand(-1, bs, -1)    # Left shape: (1, bs, C)
-            obj_box_mask = torch.zeros((bs, 1), dtype=torch.bool).to(image.device)  # Left shape: (bs, 1)
+            image = torch.cat((image, img_roi), dim = 1)
+            num_cam = image.shape[1]    # Update camera number
 
         ### Obtain latent z from action sequence
         if self.cfg['POLICY']['USE_VAE'] and is_training: # VAE encoder
@@ -178,8 +170,7 @@ class IsaacGripperDETR(nn.Module):
             features = self.input_proj(features)
             img_src = features.view(bs, num_cam, -1, features.shape[-2], features.shape[-1]).permute(0, 2, 1, 3, 4)  # Left shape: (B, C, N, H, W)
             cam_pos = pos.view(1, 1, -1, pos.shape[-2], pos.shape[-1]).permute(0, 2, 1, 3, 4)  # Left shape: (1, C, 1, H, W)
-            camera_view_pos = self.camera_view_pos_embed.weight.permute(1, 0)[None, :, :, None, None]  # (1, C, N, 1, 1)
-            cam_pos = (cam_pos + camera_view_pos).expand(bs, -1, -1, -1, -1)  # (B, C, N, H, W)
+            cam_pos = cam_pos.expand(bs, -1, num_cam, -1, -1)  # (B, C, N, H, W)
             src = img_src.flatten(2).permute(2, 0, 1)   # Left shape: (NHW, B, C)
             pos = cam_pos.flatten(2).permute(2, 0, 1)  # Left shape: (NHW, B, C)
         elif self.cfg['POLICY']['BACKBONE'] == 'dinov2_s':
@@ -192,11 +183,20 @@ class IsaacGripperDETR(nn.Module):
             features = self.input_proj(features)
             src = features.view(bs, -1, self.hidden_dim).permute(1, 0, 2)   # Left shape: (num_cam * l, B, C)
             image_pos_embed = self.image_pos_embed.weight[None, None, :, :].expand(bs, num_cam, -1, -1)  # (B, num_cam, l, C)
-            camera_view_pos_embed = self.camera_view_pos_embed.weight[None, :, None, :].expand(bs, -1, -1, -1)  # (B, num_cam, 1, C)
-            pos = (image_pos_embed + camera_view_pos_embed).view(bs, -1, self.hidden_dim).permute(1, 0, 2)  # Left shape: (num_cam * l, B, C)
+            pos = image_pos_embed.view(bs, -1, self.hidden_dim).permute(1, 0, 2)  # Left shape: (num_cam * l, B, C)
         else:
             raise NotImplementedError
         mask = torch.zeros((bs, src.shape[0]), dtype=torch.bool).to(image.device)   # Left shape: (B, NHW)
+
+        if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
+            src = src + obj_box_src
+
+        if self.cfg["POLICY"]["USE_CLIP"]:
+            text_tokens = self.clip_tokenizer(task_instruction_list, padding=True, return_tensors="pt").to(image.device)
+            with torch.no_grad():
+                task_instruction_emb = self.clip_text_model(**text_tokens).text_embeds.detach()  # Left shape: (bs, clip_text_len)
+            task_instruction_src = task_instruction_emb[None]   # Left shape: (1, B, C)
+            src = src + task_instruction_src  # Left shape: (L, B, C)
 
         # proprioception features
         if 'past_action' in self.cfg['DATA']['INPUT_KEYS']:
@@ -221,17 +221,6 @@ class IsaacGripperDETR(nn.Module):
             src = torch.cat((src, latent_input), dim = 0)  # Left shape: (L, B, C)
             pos = torch.cat((pos, vae_pos), dim = 0)  # Left shape: (L, B, C)
             mask = torch.cat((mask, vae_mask), dim = 1) # Left shape: (B, L)
-        if self.cfg["POLICY"]["USE_CLIP"]:
-            task_instruction_src = task_instruction_emb[None]   # Left shape: (1, B, C)
-            task_instruction_pos = self.task_instruction_pos_emb.weight[:, None, :].expand(-1, bs, -1)   # Left shape: (1, B, C)
-            task_instruction_mask = torch.zeros((bs, task_instruction_pos.shape[0]), dtype=torch.bool).to(image.device) # Left shape: (B, 1)
-            src = torch.cat((src, task_instruction_src), dim = 0)  # Left shape: (L, B, C)
-            pos = torch.cat((pos, task_instruction_pos), dim = 0)  # Left shape: (L, B, C)
-            mask = torch.cat((mask, task_instruction_mask), dim = 1) # Left shape: (B, L)
-        if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
-            src = torch.cat((src, obj_box_src), dim = 0)  # Left shape: (L, B, C)
-            pos = torch.cat((pos, obj_box_pos), dim = 0)  # Left shape: (L, B, C)
-            mask = torch.cat((mask, obj_box_mask), dim = 1) # Left shape: (B, L)
     
         query_emb = self.query_embed.weight.unsqueeze(1).repeat(1, bs, 1)   # Left shape: (num_query, B, C)
         hs = self.transformer(src, mask, query_emb, pos) # Left shape: (num_dec, B, num_query, C)
@@ -239,11 +228,19 @@ class IsaacGripperDETR(nn.Module):
         if not is_training: hs = hs[-1] 
 
         a_hat = self.action_head(hs)    # left shape: (num_dec, B, num_query, action_dim)
+        if self.cfg['POLICY']['OUTPUT_MODE'] == 'relative':
+            cur_status = torch.cat((end_obs[:, -1, :7], joint_obs[:, -1, 7:]), dim = 1)[None, :, None, :] # left shape: (1, B, 1, action_dim)
+            a_hat = a_hat + cur_status
+        elif self.cfg['POLICY']['OUTPUT_MODE'] == 'absolute':
+            pass
+        else:
+            raise NotImplementedError
         if self.cfg['POLICY']['USE_UNCERTAINTY']:
             a_hat_uncern = self.uncern_head(hs) # left shape: (num_dec, B, num_query, 1)
             a_hat_uncern = torch.clamp(a_hat_uncern, min = self.cfg['POLICY']['UNCERTAINTY_RANGE'][0], max = self.cfg['POLICY']['UNCERTAINTY_RANGE'][1])
         else:
             a_hat_uncern = None
+    
         return a_hat, a_hat_uncern, [mu, logvar]
     
 def mlp(input_dim, hidden_dim, output_dim, hidden_depth):

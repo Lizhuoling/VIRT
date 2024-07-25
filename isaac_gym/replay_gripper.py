@@ -229,6 +229,6 @@ def get_isaac_fixedboxes_reward(isaac_env):
     return reward
 
 if __name__ == '__main__':
-    replay(task_name = 'isaac_fiveboxred', root_path = '/home/cvte/twilight/data/sim_isaac_fiveboxred/h5py', start_idx = 0)
+    replay(task_name = 'isaac_fiveboxred', root_path = '/home/cvte/twilight/data/isaac_fiveboxred/h5py', start_idx = 0)
 
     #print(replay_onecase(task_name = 'isaac_singlecolorbox', h5py_path = '/home/cvte/twilight/data/isaac_singlecolorbox/h5py/episode_7.hdf5'))

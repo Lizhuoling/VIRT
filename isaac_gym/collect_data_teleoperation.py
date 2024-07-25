@@ -22,10 +22,11 @@ import matplotlib.pyplot as plt
 from itertools import combinations
 
 import leap_motion
-from isaac_gym.gripper_multicolorbox import GripperMultiColorBox
+from gripper_multicolorbox import GripperMultiColorBox
 from gripper_singlebox import GripperSingleBox
 from gripper_fixedboxes import GripperFixedBoxes
 from gripper_singlecolorbox import GripperSingleColorBox
+from gripper_fiveboxred import GripperFiveBoxRed
 
 leap_mode = 'right'
 leap_conf_thre = 0.3
@@ -218,6 +219,8 @@ def collect_data_main(task_name, save_data_path = ""):
         isaac_env = GripperFixedBoxes(num_envs = 1)
     elif task_name == 'isaac_singlecolorbox':
         isaac_env = GripperSingleColorBox(num_envs = 1)
+    elif task_name == 'isaac_fiveboxred':
+        isaac_env = GripperFiveBoxRed(num_envs = 1)
     kf = TrajectoryFilter9D()
 
     cnt = 0
@@ -275,11 +278,11 @@ def collect_data_main(task_name, save_data_path = ""):
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    task_name = 'isaac_singlecolorbox'
-    #save_data_path = '/home/cvte/twilight/data/isaac_singlecolorbox'
-    #collect_data_main(task_name = task_name, save_data_path = save_data_path)
+    task_name = 'isaac_fiveboxred'
+    save_data_path = '/home/cvte/twilight/data/isaac_fiveboxred'
+    collect_data_main(task_name = task_name, save_data_path = save_data_path)
 
-    collect_data_main(task_name = task_name)
+    #collect_data_main(task_name = task_name)
 
     '''save_data_manager = SaveDataManager(save_data_path)
     action_list = [np.zeros((7, ), dtype = np.float32)]

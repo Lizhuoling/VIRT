@@ -430,7 +430,6 @@ class GripperSingleBox():
 
             vis_frame = np.concatenate((top_bgr_image, side1_bgr_image, side2_bgr_image, hand_bgr_image), axis = 1)
             cv2.imshow('vis', vis_frame)
-            cv2.waitKey(1)
 
             images = dict(
                 top_bgr_image = top_bgr_image,

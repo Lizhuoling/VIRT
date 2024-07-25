@@ -127,7 +127,7 @@ def eval_bc(cfg, ckpt_path, save_episode=True):
     
     # load policy and stats
     policy = make_policy(policy_class, cfg)
-    loading_status = policy.load_state_dict(torch.load(ckpt_path)['model'], strict = False)
+    loading_status = policy.load_state_dict(torch.load(ckpt_path)['model'], strict = True)
     print(loading_status)
     policy.cuda()
     policy.eval()
@@ -194,7 +194,7 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
     policy = make_policy(policy_class, cfg)
     if load_dir != '':
         load_dict = torch.load(load_dir)
-        loading_status = policy.load_state_dict(load_dict['model'], strict = False)
+        loading_status = policy.load_state_dict(load_dict['model'], strict = True)
         start_iter = load_dict['iter']
     else:
         start_iter = 0
