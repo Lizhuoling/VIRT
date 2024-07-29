@@ -274,7 +274,7 @@ class GripperMultiColorBox():
             container_left_handle = self.gym.create_actor(env, container_left_asset, container_left_pose, "container_left", i, 0)
             container_right_handle = self.gym.create_actor(env, container_right_asset, container_right_pose, "container_right", i, 0)
             for container_handle in [container_bottom_handle, container_front_handle, container_back_handle, container_left_handle, container_right_handle]:
-                self.gym.set_rigid_body_color(env, container_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, gymapi.Vec3(np.array(0), np.array(0.6), np.array(0)))
+                self.gym.set_rigid_body_color(env, container_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, gymapi.Vec3(np.array(0.2), np.array(0.2), np.array(0.2)))
 
             # add box
             rerange_flag = True

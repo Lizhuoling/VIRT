@@ -14,24 +14,18 @@ class IsaacGripper_ACTPolicy(nn.Module):
         super().__init__()
         self.cfg = cfg
         model = get_IsaacGripper_ACT_model(cfg)
-        self.model = model.cuda() # CVAE decoder
-        if self.cfg['POLICY']['USE_VAE']:
-            self.kl_weight = cfg['POLICY']['KL_WEIGHT']
+        self.model = model.cuda()
 
-    def __call__(self, image, past_action, end_obs, joint_obs, action=None, observation_is_pad = None, past_action_is_pad = None, action_is_pad = None, task_instruction_list = None, \
-                 vec_loss_weight = None, gripper_loss_weight = None):
+        self.CrossEntropyLoss = nn.CrossEntropyLoss()
+        self.status_cls_loss_weight = 10
+
+    def __call__(self, image, past_action, end_obs, joint_obs, action=None, observation_is_pad = None, past_action_is_pad = None, action_is_pad = None, task_instruction_list = None, status = None):
         env_state = None
         if action is not None: # training or validation time
-            a_hat, a_hat_uncern, (mu, logvar) = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, action = action, \
-                            observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list)
+            a_hat, a_hat_uncern, status_pred = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, action = action, \
+                            observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list, status = status)
             loss_dict = dict()
             all_l1 = F.l1_loss(action.unsqueeze(0).expand(a_hat.shape[0], -1, -1, -1), a_hat, reduction='none') # Left shape: (num_dec, B, num_query, num_action)
-            ori_l1_t_sum = all_l1.sum(dim = 2, keepdim = True).detach()
-            if self.cfg['TRAIN']['USE_VELOCITY_LOSS_WEIGHT']:
-                all_l1 = all_l1 * vec_loss_weight[None, :, :, None].expand(all_l1.shape[0], -1, -1, all_l1.shape[3]) # Left shape: (num_dec, B, num_query, num_action)
-            if self.cfg['TRAIN']['USE_GRIPPER_LOSS_WEIGHT']:
-                all_l1 = all_l1 * gripper_loss_weight[None, :, :, None].expand(all_l1.shape[0], -1, -1, all_l1.shape[3])
-            all_l1 = all_l1 * (ori_l1_t_sum / all_l1.sum(dim = 2, keepdim = True).detach())
             expand_action_is_pad = action_is_pad[None, :, :, None].expand(all_l1.shape[0], -1, -1, all_l1.shape[3])    # action_is_pad shape: (B, num_query), expand_action_is_pad shape: (num_dec, B, num_query, num_action)
             mask_l1 = (all_l1 * ~expand_action_is_pad).sum(dim = -1) # Left shape: (num_dec, B, num_query)
             if self.cfg['POLICY']['USE_UNCERTAINTY']:
@@ -43,15 +37,13 @@ class IsaacGripper_ACTPolicy(nn.Module):
             uncern_l1 = uncern_l1.sum(-1)   # Left shape: (num_dec, B)
             valid_count = torch.clip((~action_is_pad)[None].sum(dim = -1), min = 1)  # Left shape: (num_dec,)
             l1 = (uncern_l1 / valid_count).mean(dim = -1)    # Left shape: (num_dec,)
-            
-            total_l1 = l1.sum()
-            if self.cfg['POLICY']['USE_VAE']:
-                total_kld, dim_wise_kld, mean_kld = kl_divergence(mu, logvar)
-                kl_loss = total_kld[0]
-                total_loss = total_l1 + self.kl_weight * kl_loss
-                loss_dict['vae_loss'] = kl_loss.item()
-            else:
-                total_loss = total_l1
+            total_loss = l1.sum()
+
+            if self.cfg['POLICY']['STATUS_PREDICT']:
+                for dec_cnt in range(status_pred.shape[0]):
+                    status_pred_loss = self.status_cls_loss_weight * self.CrossEntropyLoss(status_pred[dec_cnt, :, :], status.long())
+                    loss_dict[f'status_pred_{dec_cnt}'] = status_pred_loss.item()
+                    total_loss = total_loss + status_pred_loss
 
             if self.cfg['POLICY']['USE_UNCERTAINTY']:
                 l1_without_uncern = (mask_l1.sum(-1) / valid_count).mean(dim = -1)  # Left shape: (num_dec,)
@@ -65,9 +57,9 @@ class IsaacGripper_ACTPolicy(nn.Module):
             
             return total_loss, loss_dict
         else: # inference time
-            a_hat, _, (_, _) = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, \
-                            observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, task_instruction_list = task_instruction_list)
-            return a_hat
+            a_hat, _, status_pred = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, \
+                            observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, task_instruction_list = task_instruction_list, status = status)
+            return a_hat, status_pred
 
 def kl_divergence(mu, logvar):
     batch_size = mu.size(0)

@@ -1,5 +1,5 @@
-exp_id=isaac_singlecolorbox_det
-config_name=isaac_singlecolorbox_det
+exp_id=isaac_multicolorbox
+config_name=isaac_multicolorbox
 
 nnodes=1
 nproc_per_node=1

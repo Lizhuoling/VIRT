@@ -132,7 +132,9 @@ def collect_data_main(task_name, save_data_path = "", total_data_num = 1):
         script_manager = FiveBoxRedScript(isaac_env = isaac_env)
 
     last_time = time.time()
-    ctrl_min_time = 0.05
+    simulation_step = 0
+    last_step = 0
+    ctrl_min_step = 2
     print('\033[93m' + "Task instruction: {}".format(isaac_env.task_instruction[0]) + '\033[0m')
 
     action_list, observations_list, images_list = [], [], []
@@ -144,14 +146,14 @@ def collect_data_main(task_name, save_data_path = "", total_data_num = 1):
     print(f"Start collect sample {sample_cnt}")
     while True:
         cur_time = time.time()
-        if cur_time - last_time < ctrl_min_time:
-            time_flag = False
+        if simulation_step - last_step < ctrl_min_step:
+            ctrl_interval_flag = False
         else:
-            time_flag = True
-            last_time = cur_time
+            ctrl_interval_flag = True
+            last_step = simulation_step
         isaac_env.update_simulator_before_ctrl()
 
-        if time_flag:
+        if ctrl_interval_flag:
             action, observations, end_signal = script_manager.update_pos_action()
             isaac_env.update_action_map()
 
@@ -162,7 +164,7 @@ def collect_data_main(task_name, save_data_path = "", total_data_num = 1):
         images = images_envs[0]
         
         # Save data.
-        if save_data_flag and time_flag:
+        if save_data_flag and ctrl_interval_flag:
             action_list.append(action)
             observations_list.append(observations)
             images_list.append(images)
@@ -179,6 +181,7 @@ def collect_data_main(task_name, save_data_path = "", total_data_num = 1):
 
         if sample_cnt >= total_data_num:
             break
+        simulation_step += 1
             
     isaac_env.clean_up()
     cv2.destroyAllWindows()

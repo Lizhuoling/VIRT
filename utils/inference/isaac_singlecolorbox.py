@@ -39,14 +39,12 @@ class IsaacSingleColorBoxTestEnviManager():
                 joint_obs_list = []
                 action_list = []
 
-                start_time = time.time()
-                sim_pass_time = 0
-                sim_end_time, sim_start_time = start_time, start_time
                 actions_pred = None
+                simulation_step = 0
+                last_simulation_step = 0
                 execution_step = 0
-                while time.time() - start_time <= self.cfg['EVAL']['INFERENCE_MAX_TIME']:
+                while simulation_step <= self.cfg['EVAL']['INFERENCE_MAX_STEPS']:
                     isaac_envi.update_simulator_before_ctrl()
-                    sim_end_time = time.time()
 
                     if actions_pred == None or execution_step >= actions_pred.shape[1]:
                         if len(action_list) == 0:
@@ -56,15 +54,13 @@ class IsaacSingleColorBoxTestEnviManager():
                             action_list.append(torch.cat((norm_end_observation[:, 0:7], norm_joint_observation[:, 7:9]), dim = 1)) # Initialize the first element with joint observation
                         all_cam_images, past_action, end_obs, joint_obs, past_action_is_pad, observation_is_pad, task_instruction = self.prepare_policy_input(enb_obs_list, \
                                                                                 joint_obs_list, action_list, all_cam_images, isaac_envi.task_instruction)
-                        norm_actions_pred = self.policy(image = all_cam_images, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, observation_is_pad = observation_is_pad, \
+                        norm_actions_pred, _ = self.policy(image = all_cam_images, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, observation_is_pad = observation_is_pad, \
                                     past_action_is_pad = past_action_is_pad, task_instruction_list = task_instruction)  # Left shape: (num_env, T, 9)
                         action_mean, action_std = self.stats['action_mean'][None, None].to(all_cam_images.device), self.stats['action_std'][None, None].to(all_cam_images.device)
                         actions_pred = norm_actions_pred * action_std + action_mean
                         execution_step = 0
-                        
-                    sim_pass_time += sim_end_time - sim_start_time
-                    sim_start_time = time.time()
-                    if sim_pass_time >= self.cfg['EVAL']['TEST_EXECUTION_INTERVAL']:
+                    
+                    if simulation_step - last_simulation_step >= self.cfg['EVAL']['CTRL_STEP_INTERVAL']:
                         # Save observation data
                         norm_end_observation, norm_joint_observation, all_cam_images = self.get_observation(isaac_envi)
                         enb_obs_list.append(norm_end_observation)
@@ -75,9 +71,10 @@ class IsaacSingleColorBoxTestEnviManager():
                         self.execute_action(action, isaac_envi)
                         isaac_envi.update_action_map()
                         execution_step += 1
-                        sim_pass_time = 0
+                        last_simulation_step = simulation_step
 
                     isaac_envi.update_simulator_after_ctrl()
+                    simulation_step += 1
 
                 reward = self.get_reward(isaac_envi)
                 rewards[envi_start_idx :  envi_start_idx + self.num_envi_per_batch_list[batch_idx]] = reward.cpu().numpy()

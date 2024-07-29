@@ -10,19 +10,12 @@ from transformers import AutoTokenizer, CLIPTextModelWithProjection
 
 from .backbone import build_backbone
 from .transformer import build_transformer, TransformerEncoder, TransformerEncoderLayer
-from utils.models.external_detector import ColorFilterDetector
+from utils.models.external_detector import get_detector
 
 import numpy as np
 
 import IPython
 e = IPython.embed
-
-
-def reparametrize(mu, logvar):
-    std = logvar.div(2).exp()
-    eps = torch.Tensor(std.data.new(std.size()).normal_())
-    return mu + std * eps
-
 
 def get_sinusoid_encoding_table(n_position, d_hid):
     def get_position_angle_vec(position):
@@ -37,10 +30,11 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
 class IsaacGripperDETR(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, backbones, transformer, encoder, state_dim, chunk_size, camera_names, cfg):
+    def __init__(self, backbone, transformer, state_dim, chunk_size, camera_names, cfg):
         """ Initializes the model.
         Parameters:
-            backbones: torch module of the backbone to be used. See backbone.py
+            backbones: Image backbone.
+            roi_backbone:  ROI image backbone.
             transformer: torch module of the transformer architecture. See transformer.py
             state_dim: robot state dimension of the environment
             chunk_size: number of object queries, ie detection slot. This is the maximal number of objects
@@ -49,35 +43,30 @@ class IsaacGripperDETR(nn.Module):
         """
         super().__init__()
         self.cfg = cfg
+        self.backbone = backbone
         self.chunk_size = chunk_size
         self.camera_names = camera_names
         self.transformer = transformer
-        self.encoder = encoder  # VAE encoder
         hidden_dim = transformer.d_model
         self.hidden_dim = hidden_dim
-        self.query_embed = nn.Embedding(chunk_size, hidden_dim)
+        if self.cfg['POLICY']['STATUS_PREDICT']:
+            query_num = 1 + chunk_size
+        else:
+            query_num = chunk_size
+        self.query_embed = nn.Embedding(query_num, hidden_dim)
         self.action_head = nn.Linear(hidden_dim, state_dim) # Decode transformer output as action.
         if self.cfg['POLICY']['USE_UNCERTAINTY']:
             self.uncern_head = nn.Linear(hidden_dim, 1)
-
-        # VAE Encoder
-        if self.cfg['POLICY']['USE_VAE']:
-            self.latent_dim = 32 # final size of latent z # TODO tune
-            self.cls_embed = nn.Embedding(1, hidden_dim) # cls token for VAE.
-            self.encoder_action_proj = nn.Linear(state_dim, hidden_dim) # project action to embedding
-            self.latent_proj = nn.Linear(hidden_dim, self.latent_dim*2) # project hidden state to latent std, var
-            self.register_buffer('vae_pos_table', get_sinusoid_encoding_table(1 + chunk_size, hidden_dim)) # [CLS], qpos, a_seq
-            self.latent_out_proj = nn.Linear(self.latent_dim, hidden_dim) # Project VAE latent vector to embdding for Transformer
-            self.vae_pos_embed = nn.Embedding(1, hidden_dim) # learned position embedding for vae mu and std
+        if self.cfg['POLICY']['STATUS_PREDICT']:
+            self.status_head = nn.Linear(hidden_dim, self.cfg['POLICY']['STATUS_NUM'])
 
         # Camera image feature extraction.
         if self.cfg['POLICY']['BACKBONE'] == 'resnet18':
-            self.input_proj = nn.Conv2d(backbones[0].num_channels, hidden_dim, kernel_size=1)
+            self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
         elif self.cfg['POLICY']['BACKBONE'] == 'dinov2_s':
-            self.input_proj = nn.Linear(backbones[0].num_features, hidden_dim)
+            self.input_proj = nn.Linear(backbone.num_features, hidden_dim)
             img_token_len = self.cfg['DATA']['IMG_RESIZE_SHAPE'][1] * self.cfg['DATA']['IMG_RESIZE_SHAPE'][0] // 14 // 14
             self.image_pos_embed = nn.Embedding(img_token_len, hidden_dim)
-        self.backbones = nn.ModuleList(backbones)
 
         # Proprioception information encoding.
         if 'past_action' in self.cfg['DATA']['INPUT_KEYS']:
@@ -96,15 +85,13 @@ class IsaacGripperDETR(nn.Module):
             self.clip_text_model = CLIPTextModelWithProjection.from_pretrained(cfg["POLICY"]["CLIP_PATH"])
             self.clip_tokenizer = AutoTokenizer.from_pretrained(cfg["POLICY"]["CLIP_PATH"])
         
-        if self.cfg["POLICY"]["EXTERNAL_DET"] == 'COLOR_FILTER':
-            self.object_detector = ColorFilterDetector(cfg)
-            self.obj_box_mlp = nn.Linear(4 * len(cfg['DATA']['CAMERA_NAMES']), hidden_dim)
-        elif self.cfg["POLICY"]["EXTERNAL_DET"] == 'None':
-            pass
-        else:
-            raise NotImplementedError
+        if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
+            self.object_detector = get_detector(cfg)
+            self.obj_box_mlp = nn.Linear(4, hidden_dim)
+            roi_pos_num = len(self.cfg['DATA']['CAMERA_NAMES']) * self.cfg['DATA']['ROI_RESIZE_SHAPE'][0] * self.cfg['DATA']['ROI_RESIZE_SHAPE'][1] // 14 // 14
+            self.roi_pos = nn.Embedding(roi_pos_num, hidden_dim)
 
-    def forward(self, image, past_action, end_obs, joint_obs, env_state, action = None, observation_is_pad = None, past_action_is_pad = None, action_is_pad = None, task_instruction_list = None):
+    def forward(self, image, past_action, end_obs, joint_obs, env_state, action = None, observation_is_pad = None, past_action_is_pad = None, action_is_pad = None, task_instruction_list = None, status = None):
         """
         image: (batch, num_cam, channel, height, width)
         past_action: (batch, past_action_len, action_dim)
@@ -117,55 +104,22 @@ class IsaacGripperDETR(nn.Module):
         """
         is_training = action is not None # train or val
         bs, num_cam, in_c, in_h, in_w = image.shape
-
-        if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
-            obj_boxes, img_roi = self.object_detector(image, task_instruction_list)  # Lefty shape: (bs, num_cam, 4)
-            obj_box_src = self.obj_box_mlp(obj_boxes.view(bs, -1))[None]  # Left shape: (1, bs, C)
-            image = torch.cat((image, img_roi), dim = 1)
-            num_cam = image.shape[1]    # Update camera number
-
-        ### Obtain latent z from action sequence
-        if self.cfg['POLICY']['USE_VAE'] and is_training: # VAE encoder
-            # project action sequence to embedding dim, and concat with a CLS token
-            action_embed = self.encoder_action_proj(action) # (bs, seq, hidden_dim)
-            cls_embed = self.cls_embed.weight # (1, hidden_dim)
-            cls_embed = torch.unsqueeze(cls_embed, axis=0).repeat(bs, 1, 1) # (bs, 1, hidden_dim)
-            encoder_input = torch.cat([cls_embed, action_embed], axis=1) # (bs, seq+1, hidden_dim)
-            encoder_input = encoder_input.permute(1, 0, 2) # (seq+1, bs, hidden_dim)
-            # do not mask cls token
-            cls_joint_is_pad = torch.full((bs, 1), False).to(image.device) # False: not a padding
-            vae_is_pad = torch.cat([cls_joint_is_pad, action_is_pad], axis=1)  # (bs, 1+seq)
-            # obtain position embedding
-            pos_embed = self.vae_pos_table.clone().detach()
-            pos_embed = pos_embed.permute(1, 0, 2)  # (1+seq, 1, hidden_dim)
-            # query model
-            encoder_output = self.encoder(encoder_input, pos=pos_embed, src_key_padding_mask=vae_is_pad)
-            encoder_output = encoder_output[0] # take cls output only
-            latent_info = self.latent_proj(encoder_output)
-            mu = latent_info[:, :self.latent_dim]   # Left shape: (B, latent_dim)
-            logvar = latent_info[:, self.latent_dim:]   # Left shape: (B, latent_dim)
-            latent_sample = reparametrize(mu, logvar)
-            latent_input = self.latent_out_proj(latent_sample)[None]  # Left shape: (B, hidden_dim)
-            vae_pos = self.vae_pos_embed.weight[:, None, :].expand(-1, bs, -1)  # Left shape: (1, B, C)
-            vae_mask = torch.zeros((bs, 1), dtype=torch.bool).to(image.device)  # Left shape: (B, 1)
-        elif self.cfg['POLICY']['USE_VAE'] and not is_training:
-            mu = logvar = None
-            latent_sample = torch.zeros([bs, self.latent_dim], dtype=torch.float32).to(image.device)
-            latent_input = self.latent_out_proj(latent_sample)[None]    # Left shape: (1, B, C)
-            vae_pos = self.vae_pos_embed.weight[:, None, :].expand(-1, bs, -1)  # Left shape: (1, B, C)
-            vae_mask = torch.zeros((bs, 1), dtype=torch.bool).to(image.device)  # Left shape: (B, 1)
-        else:
-            mu = logvar = None
         
+        if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
+            assert self.cfg['POLICY']['BACKBONE'] == 'dinov2_s', "ROI image backbone only supports DINOv2 now!"
+            roi_box, roi_img = self.object_detector(image, task_instruction_list, status)  # roi_box shape: (bs, num_cam, num_detbox, 4), roi_img shape: (bs, num_cam, num_detbox, 3, roi_h, roi_w)
+            _, _, num_detbox, _, roi_h, roi_w = roi_img.shape
+            assert num_detbox == 1
+            roi_img = roi_img.view(bs * num_cam * num_detbox, 3, roi_h, roi_w)
+            roi_box = roi_box.view(bs, num_cam * num_detbox, 4)
+            roi_box_emb = self.obj_box_mlp(roi_box) # Left shape: (bs, num_cam, C)
+            
         # Image observation features and position embeddings
         image = image.view(bs * num_cam, in_c, in_h, in_w)  # Left shape: (bs * num_cam, C, H, W)
         if self.cfg['POLICY']['BACKBONE'] == 'resnet18':
-            if self.cfg['TRAIN']['LR_BACKBONE'] <= 0:
-                self.backbones[0].eval()
-                with torch.no_grad():
-                    features, pos = self.backbones[0](image)
-            else:
-                features, pos = self.backbones[0](image)
+            assert self.cfg["POLICY"]["EXTERNAL_DET"] == False
+            features, pos = self.backbone(image)
+
             features, pos = features[0], pos[0] # features shape: (bs * num_cam, C, H, W), pos shape: (1, C, H, W)
             features = self.input_proj(features)
             img_src = features.view(bs, num_cam, -1, features.shape[-2], features.shape[-1]).permute(0, 2, 1, 3, 4)  # Left shape: (B, C, N, H, W)
@@ -174,22 +128,23 @@ class IsaacGripperDETR(nn.Module):
             src = img_src.flatten(2).permute(2, 0, 1)   # Left shape: (NHW, B, C)
             pos = cam_pos.flatten(2).permute(2, 0, 1)  # Left shape: (NHW, B, C)
         elif self.cfg['POLICY']['BACKBONE'] == 'dinov2_s':
-            if self.cfg['TRAIN']['LR_BACKBONE'] <= 0:
-                self.backbones[0].eval()
-                with torch.no_grad():
-                    features = self.backbones[0].forward_features(image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, l, C)
-            else:
-                features = self.backbones[0].forward_features(image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, l, C)
+            features = self.backbone.forward_features(image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, l, C)
             features = self.input_proj(features)
             src = features.view(bs, -1, self.hidden_dim).permute(1, 0, 2)   # Left shape: (num_cam * l, B, C)
             image_pos_embed = self.image_pos_embed.weight[None, None, :, :].expand(bs, num_cam, -1, -1)  # (B, num_cam, l, C)
-            pos = image_pos_embed.view(bs, -1, self.hidden_dim).permute(1, 0, 2)  # Left shape: (num_cam * l, B, C)
+            pos = image_pos_embed.reshape(bs, -1, self.hidden_dim).permute(1, 0, 2)  # Left shape: (num_cam * l, B, C)
+
+            if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
+                roi_feature = self.backbone.forward_features(roi_img)['x_norm_patchtokens']  # Left shape: (bs * num_cam, roi_l, C)
+                roi_feature = self.input_proj(roi_feature).view(bs, num_cam, -1, self.hidden_dim)   # Left shape: (bs, num_cam, roi_l, C)
+                roi_feature = roi_feature + roi_box_emb[:, :, None] # Left shape: (bs, num_cam, roi_l, C)
+                roi_feature = roi_feature.view(bs, -1, self.hidden_dim).permute(1, 0, 2)  # Left shape: (num_cam * roi_l, B, C)
+                src = torch.cat((src, roi_feature), dim = 0)  # Left shape: (l, B, C)
+                roi_pos = self.roi_pos.weight[None, :, :].expand(bs, -1, -1).permute(1, 0, 2)  # Left shape: (num_cam * l, B, C)
+                pos = torch.cat((pos, roi_pos), axis = 0)  # Left shape: (num_cam * l, B, C)
         else:
             raise NotImplementedError
         mask = torch.zeros((bs, src.shape[0]), dtype=torch.bool).to(image.device)   # Left shape: (B, NHW)
-
-        if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
-            src = src + obj_box_src
 
         if self.cfg["POLICY"]["USE_CLIP"]:
             text_tokens = self.clip_tokenizer(task_instruction_list, padding=True, return_tensors="pt").to(image.device)
@@ -217,20 +172,24 @@ class IsaacGripperDETR(nn.Module):
             src = torch.cat((src, joint_obs_src), dim = 0)  # Left shape: (L, B, C)
             pos = torch.cat((pos, joint_obs_pos), dim = 0)  # Left shape: (L, B, C)
             mask = torch.cat((mask, observation_is_pad), dim = 1) # Left shape: (B, L)
-        if self.cfg['POLICY']['USE_VAE']:
-            src = torch.cat((src, latent_input), dim = 0)  # Left shape: (L, B, C)
-            pos = torch.cat((pos, vae_pos), dim = 0)  # Left shape: (L, B, C)
-            mask = torch.cat((mask, vae_mask), dim = 1) # Left shape: (B, L)
     
         query_emb = self.query_embed.weight.unsqueeze(1).repeat(1, bs, 1)   # Left shape: (num_query, B, C)
         hs = self.transformer(src, mask, query_emb, pos) # Left shape: (num_dec, B, num_query, C)
+        if self.cfg['POLICY']['STATUS_PREDICT']:
+            status_hs = hs[:, :, 0] # Left shape: (num_dec, B, C)
+            hs = hs[:, :, 1:]
+            status_pred = self.status_head(status_hs)  # left shape: (num_dec, B, num_status)
+            if not is_training: status_pred = status_pred[-1].argmax(dim = -1)  # Left shape: (B,)
+        else:
+            status_pred = None
         
-        if not is_training: hs = hs[-1] 
+        if not is_training: hs = hs[-1] # Left shape: (B, num_query, C)
 
         a_hat = self.action_head(hs)    # left shape: (num_dec, B, num_query, action_dim)
-        if self.cfg['POLICY']['OUTPUT_MODE'] == 'relative':
-            cur_status = torch.cat((end_obs[:, -1, :7], joint_obs[:, -1, 7:]), dim = 1)[None, :, None, :] # left shape: (1, B, 1, action_dim)
-            a_hat = a_hat + cur_status
+        if self.cfg['POLICY']['OUTPUT_MODE'] == 'relative': # Only the robotic arm joint is controlled with relative signal, the gripper is still controlled absolutely.
+            cur_status = end_obs[:, -1, :7][:, None, :] # left shape: (B, 1, action_dim)
+            if is_training: cur_status = cur_status[None]   # left shape: (1, B, 1, action_dim)
+            a_hat[..., :7] = a_hat[..., :7] + cur_status
         elif self.cfg['POLICY']['OUTPUT_MODE'] == 'absolute':
             pass
         else:
@@ -240,8 +199,8 @@ class IsaacGripperDETR(nn.Module):
             a_hat_uncern = torch.clamp(a_hat_uncern, min = self.cfg['POLICY']['UNCERTAINTY_RANGE'][0], max = self.cfg['POLICY']['UNCERTAINTY_RANGE'][1])
         else:
             a_hat_uncern = None
-    
-        return a_hat, a_hat_uncern, [mu, logvar]
+        
+        return a_hat, a_hat_uncern, status_pred
     
 def mlp(input_dim, hidden_dim, output_dim, hidden_depth):
     if hidden_depth == 0:
@@ -276,20 +235,12 @@ def get_IsaacGripper_ACT_model(cfg):
     # From state
     # backbone = None # from state for now, no need for conv nets
     # From image
-    backbones = []
     backbone = build_backbone(cfg)
-    backbones.append(backbone)
     transformer = build_transformer(cfg)
 
-    if cfg['POLICY']['USE_VAE']:
-        vae_encoder = build_encoder(cfg)    # VAE encoder
-    else:
-        vae_encoder = None
-
     model = IsaacGripperDETR(
-        backbones,
+        backbone,
         transformer,
-        vae_encoder,
         state_dim=cfg['POLICY']['STATE_DIM'],
         chunk_size=cfg['POLICY']['CHUNK_SIZE'],
         camera_names=cfg['DATA']['CAMERA_NAMES'],

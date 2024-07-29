@@ -223,26 +223,24 @@ def collect_data_main(task_name, save_data_path = ""):
         isaac_env = GripperFiveBoxRed(num_envs = 1)
     kf = TrajectoryFilter9D()
 
-    cnt = 0
-    last_time = time.time()
-    ctrl_min_time = 0.05
+    simulation_step = 0
+    last_step = 0
+    ctrl_min_step = 2
     print('\033[93m' + "Task instruction: {}".format(isaac_env.task_instruction[0]) + '\033[0m')
     with leap_connection.open():
             leap_connection.set_tracking_mode(leap_motion.leap.TrackingMode.Desktop)
             while True:
-                cur_time = time.time()
-                if cur_time - last_time < ctrl_min_time:
-                    time_flag = False
+                if simulation_step - last_step < ctrl_min_step:
+                    step_flag = False
                 else:
-                    time_flag = True
-                    last_time = cur_time
+                    step_flag = True
+                    last_step = simulation_step
                 isaac_env.update_simulator_before_ctrl()
                 leap_flag = leap_motion.get_hand(mode = leap_mode, conf_thre = leap_conf_thre) != None
                 if leap_flag:
                     ego = update_pos_action(isaac_env, kf)
-                    if time_flag and ego != None:
+                    if step_flag and ego != None:
                         isaac_env.update_action_map()
-                        cnt += 1
                         action, observations = ego
 
                 isaac_env.update_simulator_after_ctrl()
@@ -251,7 +249,7 @@ def collect_data_main(task_name, save_data_path = ""):
                 images = images_envs[0]
                 
                 # Save data.
-                if save_data_flag and leap_flag and time_flag and ego != None and isaac_env.recoding_data_flag:
+                if save_data_flag and leap_flag and step_flag and ego != None and isaac_env.recoding_data_flag:
                     action_list.append(action)
                     observations_list.append(observations)
                     images_list.append(images)
@@ -274,12 +272,14 @@ def collect_data_main(task_name, save_data_path = ""):
                     isaac_env.init_simulate_env()
                     print('\033[93m' + "Task instruction: {}".format(isaac_env.task_instruction[0]) + '\033[0m')
 
+                simulation_step += 1
+
     isaac_env.clean_up()
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    task_name = 'isaac_fiveboxred'
-    save_data_path = '/home/cvte/twilight/data/isaac_fiveboxred'
+    task_name = 'isaac_multicolorbox'
+    save_data_path = '/home/cvte/twilight/data/isaac_multicolorbox'
     collect_data_main(task_name = task_name, save_data_path = save_data_path)
 
     #collect_data_main(task_name = task_name)

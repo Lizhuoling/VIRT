@@ -115,15 +115,7 @@ def inference_get_images(ts, camera_names, inference_transforms):
 def eval_bc(cfg, ckpt_path, save_episode=True):
     ckpt_dir = cfg['CKPT_DIR']
     ckpt_name = ckpt_path.split('/')[-1]
-    state_dim = cfg['POLICY']['STATE_DIM']
-    real_robot = cfg['EVAL']['REAL_ROBOT']
     policy_class = cfg['POLICY']['POLICY_NAME']
-    onscreen_render = cfg['ONSCREEN_RENDER']
-    camera_names = cfg['DATA']['CAMERA_NAMES']
-    max_timesteps = cfg['EVAL']['INFERENCE_MAX_TIMESTEPS']
-    task_name = cfg['TASK_NAME']
-    temporal_agg = cfg['POLICY']['TEMPORAL_AGG']
-    onscreen_cam = 'angle'
     
     # load policy and stats
     policy = make_policy(policy_class, cfg)
@@ -175,13 +167,13 @@ def forward_pass(data, policy, cfg):
         image_data, qpos_data, action_data, is_pad = image_data.cuda(), qpos_data.cuda(), action_data.cuda(), is_pad.cuda()
         return policy(qpos_data, image_data, action_data, is_pad)
     elif cfg['POLICY']['POLICY_NAME'] == 'IsaacGripper_ACT':
-        image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction_list, vec_loss_weight, gripper_loss_weight = data
+        image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction_list, status = data
         
-        image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, vec_loss_weight, gripper_loss_weight = image_data.cuda(), past_action.cuda(), action_data.cuda(), \
-            end_observation.cuda(), joint_observation.cuda(), observation_is_pad.cuda(), past_action_is_pad.cuda(), action_is_pad.cuda(), vec_loss_weight.cuda(), gripper_loss_weight.cuda()
-        
+        image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, status = image_data.cuda(), past_action.cuda(), action_data.cuda(), \
+            end_observation.cuda(), joint_observation.cuda(), observation_is_pad.cuda(), past_action_is_pad.cuda(), action_is_pad.cuda(), status.cuda()
+
         return policy(image = image_data, past_action = past_action, end_obs = end_observation, joint_obs = joint_observation, action = action_data, observation_is_pad = observation_is_pad, \
-                      past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list, vec_loss_weight = vec_loss_weight, gripper_loss_weight = gripper_loss_weight)
+                      past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list, status = status)
 
 def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
     logger = logging.getLogger("grasp")

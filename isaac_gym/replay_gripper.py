@@ -84,23 +84,26 @@ def replay_onecase(task_name, h5py_path):
 
     print(f"Task instruction: {isaac_env.task_instruction[0]}")
     last_time = time.time()
-    ctrl_min_time = 0.05
+    simulation_step = 0
+    last_step = 0
+    ctrl_min_step = 2
     action_idx = 0
     while action_idx < actions.shape[0]:
         cur_time = time.time()
-        if cur_time - last_time >= ctrl_min_time:
-            time_flag = True
-            last_time = cur_time
+        if simulation_step - last_step >= ctrl_min_step:
+            step_interval_flag = True
+            last_step = simulation_step
         else:
-            time_flag = False
+            step_interval_flag = False
         
         isaac_env.update_simulator_before_ctrl()
-        if time_flag:
+        if step_interval_flag:
             action = torch.Tensor(actions[action_idx : action_idx + 1]).to(isaac_env.pos_action.device) # Left shape: (1, 9)
             update_pos_action(isaac_env, action)
             isaac_env.update_action_map()
             action_idx += 1
         isaac_env.update_simulator_after_ctrl()
+        simulation_step += 1
 
     if task_name == 'isaac_multicolorbox':
         reward = get_issac_multicolorbox_reward(isaac_env)
@@ -229,6 +232,6 @@ def get_isaac_fixedboxes_reward(isaac_env):
     return reward
 
 if __name__ == '__main__':
-    replay(task_name = 'isaac_fiveboxred', root_path = '/home/cvte/twilight/data/isaac_fiveboxred/h5py', start_idx = 0)
+    replay(task_name = 'isaac_multicolorbox', root_path = '/home/cvte/twilight/data/isaac_multicolorbox/h5py', start_idx = 0)
 
     #print(replay_onecase(task_name = 'isaac_singlecolorbox', h5py_path = '/home/cvte/twilight/data/isaac_singlecolorbox/h5py/episode_7.hdf5'))

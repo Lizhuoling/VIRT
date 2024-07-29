@@ -1,5 +1,6 @@
 from functools import partial
 import math
+import pdb
 import logging
 from typing import Sequence, Tuple, Union, Callable
 
@@ -220,33 +221,25 @@ class DinoVisionTransformer(nn.Module):
             )
 
         return x
+    
+    def prepare_roi_tokens_with_masks(self, roi_x, roi_masks=None):
+        B, nc, w, h = roi_x.shape
+        roi_x = self.patch_embed(roi_x)
+        if roi_masks is not None:
+            roi_x = torch.where(roi_masks.unsqueeze(-1), self.mask_token.to(roi_x.dtype).unsqueeze(0), roi_x)
 
-    def forward_features_list(self, x_list, masks_list):
-        x = [self.prepare_tokens_with_masks(x, masks) for x, masks in zip(x_list, masks_list)]
-        for blk in self.blocks:
-            x = blk(x)
+        roi_x = torch.cat((self.cls_token.expand(roi_x.shape[0], -1, -1), roi_x), dim=1)
+        roi_x = roi_x + self.interpolate_pos_encoding(roi_x, w, h)
+        roi_x = roi_x[:, 1:]    # Remove the cls token
 
-        all_x = x
-        output = []
-        for x, masks in zip(all_x, masks_list):
-            x_norm = self.norm(x)
-            output.append(
-                {
-                    "x_norm_clstoken": x_norm[:, 0],
-                    "x_norm_regtokens": x_norm[:, 1 : self.num_register_tokens + 1],
-                    "x_norm_patchtokens": x_norm[:, self.num_register_tokens + 1 :],
-                    "x_prenorm": x,
-                    "masks": masks,
-                }
-            )
-        return output
+        return roi_x
 
-    def forward_features(self, x, masks=None):
-        if isinstance(x, list):
-            return self.forward_features_list(x, masks)
-
-        x = self.prepare_tokens_with_masks(x, masks)
-
+    def forward_features(self, image, roi_image = None, masks=None, roi_masks = None):
+        x = self.prepare_tokens_with_masks(image, masks)
+        if roi_image != None:
+            x_roi = self.prepare_roi_tokens_with_masks(roi_image, roi_masks)
+            x = torch.cat((x, x_roi), dim=1)
+        
         for blk in self.blocks:
             x = blk(x)
 

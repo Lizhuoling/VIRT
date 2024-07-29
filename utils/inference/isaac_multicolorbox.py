@@ -34,15 +34,16 @@ class IsaacMultiColorBoxTestEnviManager():
                     isaac_envi.update_simulator_before_ctrl()
                     isaac_envi.update_simulator_after_ctrl()
 
+                cur_status = torch.zeros((len(isaac_envi.hand_idxs),), dtype = torch.long).cuda()
                 enb_obs_list = []
                 joint_obs_list = []
                 action_list = []
 
-                start_time = time.time()
-                last_time = start_time
                 actions_pred = None
+                simulation_step = 0
+                last_simulation_step = 0
                 execution_step = 0
-                while time.time() - start_time <= self.cfg['EVAL']['INFERENCE_MAX_TIME']:
+                while simulation_step <= self.cfg['EVAL']['INFERENCE_MAX_STEPS']:
                     isaac_envi.update_simulator_before_ctrl()
 
                     if actions_pred == None or execution_step >= actions_pred.shape[1]:
@@ -51,16 +52,16 @@ class IsaacMultiColorBoxTestEnviManager():
                             enb_obs_list.append(norm_end_observation)
                             joint_obs_list.append(norm_joint_observation)
                             action_list.append(torch.cat((norm_end_observation[:, 0:7], norm_joint_observation[:, 7:9]), dim = 1)) # Initialize the first element with joint observation
-                        all_cam_images, past_action, end_obs, joint_obs, past_action_is_pad, observation_is_pad, task_instruction = self.prepare_policy_input(enb_obs_list, \
-                                                                                joint_obs_list, action_list, all_cam_images, isaac_envi.task_instruction)
-                        norm_actions_pred = self.policy(image = all_cam_images, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, observation_is_pad = observation_is_pad, \
-                                    past_action_is_pad = past_action_is_pad, task_instruction_list = task_instruction)  # Left shape: (num_env, T, 9)
+                        all_cam_images, past_action, end_obs, joint_obs, past_action_is_pad, observation_is_pad, task_instruction, status_pred = self.prepare_policy_input(enb_obs_list, \
+                                                                                joint_obs_list, action_list, all_cam_images, isaac_envi.task_instruction, cur_status)
+                        norm_actions_pred, status_pred = self.policy(image = all_cam_images, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, observation_is_pad = observation_is_pad, \
+                                    past_action_is_pad = past_action_is_pad, task_instruction_list = task_instruction, status = status_pred)  # Left shape: (num_env, T, 9)
                         action_mean, action_std = self.stats['action_mean'][None, None].to(all_cam_images.device), self.stats['action_std'][None, None].to(all_cam_images.device)
                         actions_pred = norm_actions_pred * action_std + action_mean
                         execution_step = 0
-                        
-                    cur_time = time.time()
-                    if cur_time - last_time >= self.cfg['EVAL']['TEST_EXECUTION_INTERVAL']:
+                        cur_status = status_pred
+                    
+                    if simulation_step - last_simulation_step >= self.cfg['EVAL']['CTRL_STEP_INTERVAL']:
                         # Save observation data
                         norm_end_observation, norm_joint_observation, all_cam_images = self.get_observation(isaac_envi)
                         enb_obs_list.append(norm_end_observation)
@@ -71,9 +72,10 @@ class IsaacMultiColorBoxTestEnviManager():
                         self.execute_action(action, isaac_envi)
                         isaac_envi.update_action_map()
                         execution_step += 1
-                        last_time = cur_time
+                        last_simulation_step = simulation_step
 
                     isaac_envi.update_simulator_after_ctrl()
+                    simulation_step += 1
 
                 reward = self.get_reward(isaac_envi)
                 rewards[envi_start_idx :  envi_start_idx + self.num_envi_per_batch_list[batch_idx]] = reward.cpu().numpy()
@@ -145,7 +147,7 @@ class IsaacMultiColorBoxTestEnviManager():
         
         return norm_end_observation, norm_joint_observation, all_cam_images
     
-    def prepare_policy_input(self, end_obs, joint_obs, past_action, all_cam_images, task_instruction):
+    def prepare_policy_input(self, end_obs, joint_obs, past_action, all_cam_images, task_instruction, status_pred):
         assert len(end_obs) == len(joint_obs)
         end_obs = torch.stack(end_obs, dim = 1) # Left shape: (num_env, T, 13)
         joint_obs = torch.stack(joint_obs, dim = 1) # Left shape: (num_env, T, 9)
@@ -181,7 +183,7 @@ class IsaacMultiColorBoxTestEnviManager():
             pad_past_action = torch.zeros((past_action.shape[0], past_action_len - past_action.shape[1], past_action.shape[2]), dtype = torch.float32).to(past_action.device)
             past_action = torch.cat((pad_past_action, past_action), dim = 1)
 
-        return all_cam_images.cuda(), past_action.cuda(), end_obs.cuda(), joint_obs.cuda(), past_action_is_pad.cuda(), observation_is_pad.cuda(), task_instruction
+        return all_cam_images.cuda(), past_action.cuda(), end_obs.cuda(), joint_obs.cuda(), past_action_is_pad.cuda(), observation_is_pad.cuda(), task_instruction, status_pred
     
     def execute_action(self, action, isaac_envi):
         hand_pos = isaac_envi.rb_states[isaac_envi.hand_idxs, :3] # Left shape: (num_envi, 3)
@@ -215,7 +217,7 @@ class IsaacMultiColorBoxTestEnviManager():
         reward[reward1_mask] += 1
         reward2_mask = reward1_mask & (box2_xyz[:, 0] > 0.39) & (box2_xyz[:, 0] < 0.61) & (box2_xyz[:, 1] > -0.26) & (box2_xyz[:, 1] < -0.14)
         reward[reward2_mask] += 1
-        reward3_mask = reward2_mask & (torch.norm(box1_xyz[:, 0:2] - box2_xyz[:, 0:2], dim = 1) < 0.032) & (box1_xyz[:, 2] - box1_xyz[:, 2] > 0.022)
+        reward3_mask = reward2_mask & (torch.norm(box1_xyz[:, 0:2] - box2_xyz[:, 0:2], dim = 1) < 0.032) & (box2_xyz[:, 2] - box1_xyz[:, 2] > 0.022)
         reward[reward3_mask] += 1
         
         return reward
