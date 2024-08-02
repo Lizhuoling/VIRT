@@ -1,5 +1,5 @@
-exp_id=isaac_multicolorbox
-config_name=isaac_multicolorbox
+exp_id=droid_pretrain
+config_name=droid_pretrain
 
 nnodes=1
 nproc_per_node=1
@@ -11,7 +11,7 @@ CUDA_VISIBLE_DEVICES=1 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_nod
     imitate_episodes.py \
     --config_name $config_name \
     --save_dir ./outputs/$exp_id \
-    --data_dir datasets/isaac_multicolorbox \
+    --data_dir datasets/droid \
     --num_nodes $nnodes \
     #--debug \
-    #--load_dir outputs/isaac_singlecolorbox_det_dino/policy_latest.ckpt \
+    #--load_dir outputs/isaac_multicolorbox_gridmask/policy_latest.ckpt \

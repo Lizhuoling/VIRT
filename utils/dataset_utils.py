@@ -2,7 +2,9 @@ import numpy as np
 import torch
 import os
 import random
+import pickle
 import logging
+import tqdm
 import pdb
 import h5py
 from torch.utils.data import TensorDataset, DataLoader
@@ -13,8 +15,9 @@ from utils import comm
 from utils import samplers
 from utils.datasets.act_dataset import ACTDataset, build_ACTTransforms
 from utils.datasets.isaac_gripper_dataset import IsaacGripperDataset, build_IsaacGripperTransforms
+from utils.datasets.droid_pretrain_dataset import DroidPretrainDataset, build_DroidPretrainTransforms
 
-def get_norm_stats(dataset_dir, norm_keys):
+def get_norm_stats(dataset_dir, norm_keys, norm_max_len = -1):
     norm_data_dict = {key: [] for key in norm_keys}
     mean_std_dict = {}
     for key in norm_keys:
@@ -22,6 +25,8 @@ def get_norm_stats(dataset_dir, norm_keys):
         mean_std_dict[key + '_std'] = []
     
     data_file_list = get_hdf5_list(os.path.join(dataset_dir, 'h5py'))
+    if norm_max_len > 0 and len(data_file_list) > norm_max_len:
+        data_file_list = data_file_list[:norm_max_len]
 
     for data_file in data_file_list:
         dataset_path = os.path.join(dataset_dir, 'h5py', data_file)
@@ -34,12 +39,13 @@ def get_norm_stats(dataset_dir, norm_keys):
         mean_std_dict[norm_key + '_mean'] = norm_data_dict[norm_key].mean(dim=0)
         mean_std_dict[norm_key + '_std'] = norm_data_dict[norm_key].std(dim=0)
         mean_std_dict[norm_key + '_std'] = torch.clip(mean_std_dict[norm_key + '_std'], 1e-2, np.inf) # avoid the std to be too small.
+    
     return mean_std_dict
 
 def get_hdf5_list(path):
     hdf5_list = []
     for file_name in os.listdir(path):
-        if '.hdf5' in file_name: 
+        if file_name.endswith('.hdf5'): 
             hdf5_list.append(file_name)
 
     if len(hdf5_list) == 0:
@@ -53,16 +59,25 @@ def load_data(cfg):
     is_debug = cfg['IS_DEBUG']
     data_eval_ratio = cfg['EVAL']['DATA_EVAL_RATIO']
     data_train_ratio = 1 - data_eval_ratio
+    norm_max_len = cfg['DATA']['NORM_MAX_LEN']
 
-    # obtain normalization stats for qpos and action
-    norm_stats = get_norm_stats(dataset_dir, norm_keys)
-    ids_map_dict, max_idx = get_ids_map(dataset_dir)
-    if cfg['TRAIN']['DATA_SAMPLE_MODE'] == 'random':
-        shuffled_indices = np.random.permutation(max_idx)
-    elif cfg['TRAIN']['DATA_SAMPLE_MODE'] == 'sequence':
-        shuffled_indices = get_sequence_indices(ids_map_dict = ids_map_dict, chunk_size = cfg['POLICY']['CHUNK_SIZE'])
-        random.shuffle(shuffled_indices)
-
+    if cfg["DATA"]["LOAD_INDICE_PATH"] == "":
+        # obtain normalization stats for qpos and action
+        norm_stats = get_norm_stats(dataset_dir, norm_keys, norm_max_len)
+        ids_map_dict, max_idx = get_ids_map(dataset_dir)
+        if cfg['TRAIN']['DATA_SAMPLE_MODE'] == 'random':
+            shuffled_indices = np.random.permutation(max_idx)
+        elif cfg['TRAIN']['DATA_SAMPLE_MODE'] == 'sequence':
+            shuffled_indices = get_sequence_indices(ids_map_dict = ids_map_dict, chunk_size = cfg['POLICY']['CHUNK_SIZE'])
+            random.shuffle(shuffled_indices)
+        '''indice_data = dict(norm_stats = norm_stats, ids_map_dict = ids_map_dict, max_idx = max_idx, shuffled_indices = shuffled_indices)
+        with open("/home/cvte/twilight/home/data/droid_h5py/droid_pretrain_indice.pkl", 'wb') as file:
+            pickle.dump(indice_data, file)'''
+    else:
+        with open(cfg["DATA"]["LOAD_INDICE_PATH"], 'rb') as file:
+            indice_data = pickle.load(file)
+        norm_stats, ids_map_dict, max_idx, shuffled_indices = indice_data['norm_stats'], indice_data['ids_map_dict'], indice_data['max_idx'], indice_data['shuffled_indices']
+        
     if data_eval_ratio > 0: 
         train_indices = shuffled_indices[:int(data_train_ratio * max_idx)]
         val_indices = shuffled_indices[int(data_train_ratio * max_idx):]
@@ -82,11 +97,14 @@ def load_data(cfg):
         if data_eval_ratio > 0:
             val_transforms = build_IsaacGripperTransforms(cfg, is_train = False)
             val_dataset = IsaacGripperDataset(cfg, transforms = val_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = val_indices, is_train = False)
+    elif cfg['TASK_NAME'] == 'droid_pretrain':
+        train_transforms = build_DroidPretrainTransforms(cfg, is_train = True)
+        train_dataset = DroidPretrainDataset(cfg, transforms = train_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = train_indices, is_train = True)
 
     if is_debug:
         num_workers = 0
     else:
-        num_workers = 8
+        num_workers = 32
     
     train_sample_per_gpu = cfg['TRAIN']['BATCH_SIZE'] // comm.get_world_size()
     train_sampler = samplers.TrainingSampler(len(train_dataset))
@@ -106,7 +124,7 @@ def get_ids_map(dataset_dir):
     data_file_list = get_hdf5_list(os.path.join(dataset_dir, 'h5py'))
     idx_start = 0
     ids_map = {}
-    for data_file in data_file_list:
+    for data_file in tqdm.tqdm(data_file_list):
         with h5py.File(os.path.join(dataset_dir, 'h5py', data_file), 'r') as root:
             episode_len = root['action'].shape[0]
             ids_map[data_file] = (idx_start, idx_start + episode_len - 1)

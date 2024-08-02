@@ -31,6 +31,7 @@ POLICY:
   EXTERNAL_DET_SCALE_FACTOR: 4.0
   STATUS_NUM: 1
   STATUS_PREDICT: False
+  GRID_MASK: False
 
 TRAIN:
   NUM_ITERATIONS: 100000
@@ -64,7 +65,9 @@ DATA:
   IMG_RESIZE_SHAPE: [320, 240]
   INPUT_KEYS: ['action', 'observations/qpos', 'observations/images/top',]
   NORM_KEYS: ['action', 'observations/qpos',]
+  NORM_MAX_LEN: 1000
   IMG_NORM_MEAN: [0.485, 0.456, 0.406]
   IMG_NORM_STD: [0.229, 0.224, 0.225]
   PAST_OBSERVATION_LEN: 1
   PAST_ACTION_LEN: 1
+  LOAD_INDICE_PATH: ""

@@ -31,6 +31,7 @@ from utils.metric_logger import MetricLogger
 from utils.logger import setup_logger
 from utils.models.ACT_policy import ACTPolicy
 from utils.models.IsaacGripper_ACTPolicy import IsaacGripper_ACTPolicy
+from utils.models.DroidPretrain_ACTPolicy import DroidPretrain_ACTPolicy
 from visualize_episodes import save_videos
 from configs.utils import load_yaml_with_base
 from torch.utils.tensorboard import SummaryWriter
@@ -96,6 +97,8 @@ def make_policy(policy_class, cfg):
         policy = ACTPolicy(cfg)
     elif policy_class == 'IsaacGripper_ACT':
         policy = IsaacGripper_ACTPolicy(cfg)
+    elif policy_class == 'DroidPretrain_ACT':
+        policy = DroidPretrain_ACTPolicy(cfg)
     else:
         raise NotImplementedError
 
@@ -174,6 +177,13 @@ def forward_pass(data, policy, cfg):
 
         return policy(image = image_data, past_action = past_action, end_obs = end_observation, joint_obs = joint_observation, action = action_data, observation_is_pad = observation_is_pad, \
                       past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list, status = status)
+    elif cfg['POLICY']['POLICY_NAME'] == 'DroidPretrain_ACT':
+        image_data, goal_image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction_list = data
+        image_data, goal_image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad = \
+            image_data.cuda(), goal_image_data.cuda(), past_action.cuda(), action_data.cuda(), end_observation.cuda(), joint_observation.cuda(), observation_is_pad.cuda(), past_action_is_pad.cuda(), action_is_pad.cuda()
+
+        return policy(image = image_data, goal_image = goal_image_data, past_action = past_action, action = action_data, end_obs = end_observation, joint_obs = end_observation,\
+                    observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list)
 
 def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
     logger = logging.getLogger("grasp")
