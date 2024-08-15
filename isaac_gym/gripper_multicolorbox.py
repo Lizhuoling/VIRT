@@ -477,3 +477,7 @@ class GripperMultiColorBox():
 
 if __name__ == '__main__':
     envi = GripperMultiColorBox()
+    while True:
+        envi.update_simulator_before_ctrl()
+        envi.update_simulator_after_ctrl()
+    envi.clean_up()

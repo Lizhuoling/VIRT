@@ -5,6 +5,8 @@ import numpy as np
 import torch
 import torchvision
 
+from yolov10.ultralytics import YOLOv10
+
 def get_detector(cfg,):
     if cfg["POLICY"]["EXTERNAL_DET"] == "AllColorFilter":
         return AllColorFilterDetector(cfg)
@@ -12,6 +14,60 @@ def get_detector(cfg,):
         return SingleColorFilter(cfg)
     elif cfg["POLICY"]["EXTERNAL_DET"] == "LanguageMultiColorFilter":
         return LanguageMultiColorFilter(cfg)
+    elif cfg["POLICY"]["EXTERNAL_DET"] == "YOLOv10_airphonebox":
+        return AlohaYOLOv10(cfg)
+    
+class AlohaYOLOv10():
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.yolo = YOLOv10(cfg['POLICY']['YOLO_PATH'])
+        self.yolo_conf = 0.25
+
+        norm_mean = cfg['DATA']['IMG_NORM_MEAN']
+        norm_std = cfg['DATA']['IMG_NORM_STD']
+        self.norm_mean = torch.Tensor(norm_mean)[None, None, :, None, None].cuda()
+        self.norm_std = torch.Tensor(norm_std)[None, None, :, None, None].cuda()
+        self.tensor_resize = torchvision.transforms.Resize((640, 640))
+
+    def __call__(self, img, task_instruction, status = None):
+        bs, num_cam, ch, img_h, img_w = img.shape
+
+        denorm_img = img * self.norm_std + self.norm_mean # Left shape: (bs, num_cam, 3, img_h, img_w). Range: 0~1
+        denorm_img = denorm_img.view(bs * num_cam, ch, img_h, img_w) # Left shape: (bs * num_cam, 3, img_h, img_w)
+        resize_denorm_img = self.tensor_resize(denorm_img)
+        det_results = self.yolo.predict(source=torch.clip(resize_denorm_img, min = 0, max = 1), imgsz=640, conf=self.yolo_conf, verbose = False) # det_results is a list with the length of  bs * num_cam.
+        det_boxes = [ele.boxes.xyxy[:1] for ele in det_results] # Only 1 oncerned object for each image.
+        det_boxes = [ele if ele.shape[0] > 0 else ele.new_zeros((1, 4), dtype = torch.float32) for ele in det_boxes]
+        det_boxes = torch.cat(det_boxes, dim = 0)   # Left shape: (bs * num_cam, 4)
+        det_boxes[..., [0, 2]] = det_boxes[..., [0, 2]] / 640 * img_w
+        det_boxes[..., [1, 3]] = det_boxes[..., [1, 3]] / 640 * img_h
+        rescale_det_box = rescale_box(det_boxes, (img.shape[4], img.shape[3]), scale_ratio = self.cfg['POLICY']['EXTERNAL_DET_SCALE_FACTOR'])   # Left shape: (bs * num_cam, 4)
+
+        idxs = torch.arange(bs * num_cam).to(rescale_det_box.device)[:, None]   # Left shape: (bs * num_cam, 1)
+        rescale_det_box = torch.cat([idxs, rescale_det_box], dim = 1) # Left shape: (bs * num_cam, 5)
+        resize_scale = (self.cfg['DATA']['ROI_RESIZE_SHAPE'][1], self.cfg['DATA']['ROI_RESIZE_SHAPE'][0])
+        view_img = img.view(bs * num_cam, ch, img_h, img_w)   # Left shape: (bs * num_cam, 3, img_h, img_w)
+        sample_img = torchvision.ops.roi_align(input = view_img, boxes = rescale_det_box, output_size = resize_scale)   # Left shape: (bs * num_cam, ch, img_h, img_w)
+        sample_img = sample_img.view(bs, num_cam, 1, ch, sample_img.shape[-2], sample_img.shape[-1])    # Left shape: (bs, num_cam, 1, ch, img_h, img_w)
+
+        # vis
+        '''vis_img = (denorm_img[0].permute(1, 2, 0) * 255).cpu().numpy().astype(np.uint8)
+        vis_img = np.ascontiguousarray(vis_img[:, :, ::-1])
+        box = rescale_det_box[0, 1:].cpu().numpy()
+        vis_img = cv2.rectangle(vis_img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 255, 0), 2)
+        cv2.imwrite('ori.png', vis_img)
+        vis_img = ((sample_img * self.norm_std[:, :, None] + self.norm_mean[:, :, None])[0, 0, 0].permute(1, 2, 0) * 255).cpu().numpy().astype(np.uint8)
+        vis_img = np.ascontiguousarray(vis_img[:, :, ::-1])
+        cv2.imwrite('vis.png', vis_img)
+        pdb.set_trace()'''
+
+        det_boxes[:, 0] = det_boxes[:, 0] / img_w
+        det_boxes[:, 1] = det_boxes[:, 1] / img_h
+        det_boxes[:, 2] = det_boxes[:, 2] / img_w
+        det_boxes[:, 3] = det_boxes[:, 3] / img_h
+        det_boxes = det_boxes.view(bs, num_cam, 1, 4)   # Left shape: (bs, num_cam, 1, 4)
+        
+        return det_boxes, sample_img
 
 class SingleColorFilter():
     def __init__(self, cfg):

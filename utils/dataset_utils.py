@@ -16,6 +16,7 @@ from utils import samplers
 from utils.datasets.act_dataset import ACTDataset, build_ACTTransforms
 from utils.datasets.isaac_gripper_dataset import IsaacGripperDataset, build_IsaacGripperTransforms
 from utils.datasets.droid_pretrain_dataset import DroidPretrainDataset, build_DroidPretrainTransforms
+from utils.datasets.aloha_gripper_dataset import AlohaGripperDataset, build_AlohaGripperTransforms
 
 def get_norm_stats(dataset_dir, norm_keys, norm_max_len = -1):
     norm_data_dict = {key: [] for key in norm_keys}
@@ -100,11 +101,14 @@ def load_data(cfg):
     elif cfg['TASK_NAME'] == 'droid_pretrain':
         train_transforms = build_DroidPretrainTransforms(cfg, is_train = True)
         train_dataset = DroidPretrainDataset(cfg, transforms = train_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = train_indices, is_train = True)
+    elif cfg['TASK_NAME'] in ['aloha_singleobjgrasp',]:
+        train_transforms = build_AlohaGripperTransforms(cfg, is_train = True)
+        train_dataset = AlohaGripperDataset(cfg, transforms = train_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = train_indices, is_train = True)
 
     if is_debug:
         num_workers = 0
     else:
-        num_workers = 32
+        num_workers = 4
     
     train_sample_per_gpu = cfg['TRAIN']['BATCH_SIZE'] // comm.get_world_size()
     train_sampler = samplers.TrainingSampler(len(train_dataset))

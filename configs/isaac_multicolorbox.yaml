@@ -6,21 +6,22 @@ ONSCREEN_RENDER: True
 POLICY:
   POLICY_NAME: "IsaacGripper_ACT"
   BACKBONE: "dinov2_s"
+  BACKBONE_PATH: "./pretrained/dinov2_vits14_pretrain.pth"
   CHUNK_SIZE: 10
   STATE_DIM: 9
   ENC_LAYERS: 0
   DEC_LAYERS: 3
   USE_UNCERTAINTY: True
   UNCERTAINTY_RANGE: [-10, 10]
-  USE_CLIP: True
-  CLIP_PATH: "/home/cvte/twilight/home/data/ckpts/CLIP_ckpts"
+  USE_CLIP: False
+  CLIP_PATH: "./pretrained/CLIP_ckpts"
   EXTERNAL_DET: "LanguageMultiColorFilter"
   EXTERNAL_DET_SCALE_FACTOR: 4.0
   STATUS_NUM: 3
   STATUS_PREDICT: True
 
 TRAIN:
-  NUM_ITERATIONS: 20000
+  NUM_ITERATIONS: 12000
   LOG_INTERVAL: 100
   SAVE_CHECKPOINT_INTERVAL: 1000
   BATCH_SIZE: 64

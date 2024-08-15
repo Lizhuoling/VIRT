@@ -2,6 +2,7 @@ __BASE__: "Base.yaml"
 
 TASK_NAME: 'droid_pretrain'
 ONSCREEN_RENDER: True
+SEED: 1
 
 POLICY:
   POLICY_NAME: "DroidPretrain_ACT"
@@ -43,4 +44,5 @@ DATA:
   OBSERVATION_SAMPLE_INTERVAL: 10
   PAST_ACTION_LEN: 5
   PAST_ACTION_SAMPLE_INTERVAL: 1
-  LOAD_INDICE_PATH: "/home/cvte/twilight/home/data/droid_h5py/droid_pretrain_indice.pkl"
+  LOAD_INDICE_PATH: "datasets/droid/droid_pretrain_indice.pkl"
+  PRETRAIN_VISION_INSTRUCTION: "future_frame" # "future_frame" or "grasp_keyframe"

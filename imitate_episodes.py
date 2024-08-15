@@ -1,8 +1,3 @@
-from isaacgym import gymapi
-from isaacgym import gymutil
-from isaacgym import gymtorch
-from isaacgym.torch_utils import quat_rotate, quat_conjugate, quat_mul
-
 import numpy as np
 import os
 import pdb
@@ -15,35 +10,13 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 from tqdm import tqdm
 from einops import rearrange
-import torch
-
-from constants import DT
-from constants import PUPPET_GRIPPER_JOINT_OPEN
-from utils.dataset_utils import load_data # data functions
-from utils.dataset_utils import sample_box_pose, sample_insertion_pose # robot functions
-from utils.dataset_utils import compute_dict_mean, detach_dict # helper functions
-from utils.utils import set_seed
-from utils.engine import launch
-from utils import comm
-from utils.optimizer import make_optimizer, make_scheduler
-from utils.check_point import DetectronCheckpointer
-from utils.metric_logger import MetricLogger
-from utils.logger import setup_logger
-from utils.models.ACT_policy import ACTPolicy
-from utils.models.IsaacGripper_ACTPolicy import IsaacGripper_ACTPolicy
-from utils.models.DroidPretrain_ACTPolicy import DroidPretrain_ACTPolicy
-from visualize_episodes import save_videos
-from configs.utils import load_yaml_with_base
-from torch.utils.tensorboard import SummaryWriter
-
-from sim_env import BOX_POSE
 
 import IPython
 e = IPython.embed
 
 def main(args):
     # Initialize logger
-    if not os.path.exists(args.save_dir):
+    if comm.get_rank() == 0 and not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
     exp_start_time = datetime.datetime.strftime(datetime.datetime.now(), '%m-%d %H:%M:%S')
     rank = comm.get_rank()
@@ -90,7 +63,7 @@ def main(args):
     with open(stats_path, 'wb') as f:
         pickle.dump(stats, f)
 
-    train_bc(train_dataloader, val_dataloader, cfg, load_dir = args.load_dir)
+    train_bc(train_dataloader, val_dataloader, cfg, load_dir = args.load_dir, load_pretrain = args.load_pretrain)
 
 def make_policy(policy_class, cfg):
     if policy_class == 'ACT':
@@ -99,6 +72,8 @@ def make_policy(policy_class, cfg):
         policy = IsaacGripper_ACTPolicy(cfg)
     elif policy_class == 'DroidPretrain_ACT':
         policy = DroidPretrain_ACTPolicy(cfg)
+    elif policy_class == 'AlohaGripper_ACT':
+        policy = AlohaGripper_ACTPolicy(cfg)
     else:
         raise NotImplementedError
 
@@ -174,18 +149,25 @@ def forward_pass(data, policy, cfg):
         
         image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, status = image_data.cuda(), past_action.cuda(), action_data.cuda(), \
             end_observation.cuda(), joint_observation.cuda(), observation_is_pad.cuda(), past_action_is_pad.cuda(), action_is_pad.cuda(), status.cuda()
-
+        
         return policy(image = image_data, past_action = past_action, end_obs = end_observation, joint_obs = joint_observation, action = action_data, observation_is_pad = observation_is_pad, \
                       past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list, status = status)
     elif cfg['POLICY']['POLICY_NAME'] == 'DroidPretrain_ACT':
         image_data, goal_image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction_list = data
         image_data, goal_image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad = \
             image_data.cuda(), goal_image_data.cuda(), past_action.cuda(), action_data.cuda(), end_observation.cuda(), joint_observation.cuda(), observation_is_pad.cuda(), past_action_is_pad.cuda(), action_is_pad.cuda()
-
+        
         return policy(image = image_data, goal_image = goal_image_data, past_action = past_action, action = action_data, end_obs = end_observation, joint_obs = end_observation,\
                     observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list)
+    elif cfg['POLICY']['POLICY_NAME'] == 'AlohaGripper_ACT':
+        image_data, past_action, action_data, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction, status = data
+        image_data, past_action, action_data, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, action_is_pad, status = image_data.cuda(), past_action.cuda(), \
+            action_data.cuda(), effort_obs.cuda(), qpos_obs.cuda(), qvel_obs.cuda(), observation_is_pad.cuda(), past_action_is_pad.cuda(), action_is_pad.cuda(), status.cuda()
+        
+        return policy(image = image_data, past_action = past_action, action = action_data, effort_obs = effort_obs, qpos_obs = qpos_obs, qvel_obs = qvel_obs, observation_is_pad = observation_is_pad, \
+                      past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction = task_instruction, status = status)
 
-def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
+def train_bc(train_dataloader, val_dataloader, cfg, load_dir = '', load_pretrain = ''):
     logger = logging.getLogger("grasp")
 
     num_iterations = cfg['TRAIN']['NUM_ITERATIONS']
@@ -194,6 +176,10 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
     policy_class = cfg['POLICY']['POLICY_NAME']
 
     policy = make_policy(policy_class, cfg)
+    if load_pretrain != '':
+        load_dict = torch.load(load_pretrain)['model']
+        filter_dict = {key:value for key, value in load_dict.items() if 'model.backbone' in key or 'model.transformer' in key}
+        loading_status = policy.load_state_dict(filter_dict, strict = False)
     if load_dir != '':
         load_dict = torch.load(load_dir)
         loading_status = policy.load_state_dict(load_dict['model'], strict = True)
@@ -215,8 +201,6 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir):
         warmup_iters = -1
 
     min_val_loss = np.inf
-    best_ckpt_info = None
-    start_training_time = time.time()
     end = time.time()
     train_meters = MetricLogger(delimiter=", ", )
     
@@ -324,6 +308,7 @@ if __name__ == '__main__':
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--save_dir', action='store', type=str, help='saving directory', required=True)
     parser.add_argument('--load_dir', action='store', type=str, default = '', help='The path to weight',)
+    parser.add_argument('--load_pretrain', action='store', type=str, default = '', help='The path to pre-trained weight')
     parser.add_argument('--data_dir', action='store', type=str, help='dataset folder path')
     parser.add_argument('--real_robot', action='store_true')
     parser.add_argument('--debug', action='store_true')
@@ -332,5 +317,32 @@ if __name__ == '__main__':
     parser.add_argument('--num_nodes', default = 1, type = int, help = "The number of nodes.")
     
     args = parser.parse_args()
+
+    if not args.real_robot:
+        from isaacgym import gymapi
+        from isaacgym import gymutil
+        from isaacgym import gymtorch
+        from isaacgym.torch_utils import quat_rotate, quat_conjugate, quat_mul
+    import torch    # torch must be imported after isaacgym
+    from torch.utils.tensorboard import SummaryWriter
+
+    from constants import DT
+    from constants import PUPPET_GRIPPER_JOINT_OPEN
+    from utils.dataset_utils import load_data # data functions
+    from utils.dataset_utils import sample_box_pose, sample_insertion_pose # robot functions
+    from utils.dataset_utils import compute_dict_mean, detach_dict # helper functions
+    from utils.utils import set_seed
+    from utils.engine import launch
+    from utils import comm
+    from utils.optimizer import make_optimizer, make_scheduler
+    from utils.check_point import DetectronCheckpointer
+    from utils.metric_logger import MetricLogger
+    from utils.logger import setup_logger
+    from utils.models.ACT_policy import ACTPolicy
+    from utils.models.IsaacGripper_ACTPolicy import IsaacGripper_ACTPolicy
+    from utils.models.DroidPretrain_ACTPolicy import DroidPretrain_ACTPolicy
+    from utils.models.AlohaGripper_ACTPolicy import AlohaGripper_ACTPolicy
+    from visualize_episodes import save_videos
+    from configs.utils import load_yaml_with_base
 
     launch(main, args)

@@ -122,7 +122,7 @@ def build_backbone(cfg):
         model.num_channels = backbone.num_channels
     elif cfg['POLICY']['BACKBONE'] == 'dinov2_s':
         model = DINOv2('vits')
-        pretrained_ckpt_path = '/home/cvte/.cache/torch/hub/checkpoints/dinov2_vits14_pretrain.pth'
+        pretrained_ckpt_path = cfg['POLICY']['BACKBONE_PATH']
         weight = torch.load(pretrained_ckpt_path)
         model.load_state_dict(weight)
     return model

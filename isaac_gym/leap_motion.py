@@ -80,6 +80,7 @@ def vector_to_quaternion(direction_vector, normal_vector):
     angle = np.arccos(np.clip(np.dot(direction_vector, normal_vector), -1.0, 1.0))
 
     # Compute the quaternion
+    #quaternion = Quaternion(axis=[1, 0, 0], angle=-np.pi/2) * Quaternion(axis=axis, angle=angle)
     quaternion = Quaternion(axis=axis, angle=angle)
 
     return quaternion

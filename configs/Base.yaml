@@ -11,6 +11,7 @@ ONSCREEN_RENDER: False
 POLICY:
   POLICY_NAME: "ACT"
   BACKBONE: "resnet18"
+  BACKBONE_PATH: "./pretrained/dinov2_vits14_pretrain.pth"
   USE_VAE: False
   KL_WEIGHT: 10
   CHUNK_SIZE: 100
@@ -29,6 +30,7 @@ POLICY:
   UNCERTAINTY_RANGE: [-10, 10]
   EXTERNAL_DET: None
   EXTERNAL_DET_SCALE_FACTOR: 4.0
+  YOLO_PATH: "./pretrained/yolov10_airphonebox.pt"
   STATUS_NUM: 1
   STATUS_PREDICT: False
   GRID_MASK: False
@@ -45,6 +47,7 @@ TRAIN:
   LR_BACKBONE: 0.00001
   LR_DECAY: 0.1
   LR_CLIP: 0.0000001 # minimal learning rate
+  CLIP_PATH: "./pretrained/CLIP_ckpts"
   WEIGHT_DECAY: 0.0001
   BATCH_SIZE: 8
   DATA_SAMPLE_MODE: 'random'

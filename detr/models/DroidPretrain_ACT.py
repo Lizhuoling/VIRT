@@ -111,13 +111,19 @@ class DroidPretrainDETR(nn.Module):
             if is_training and self.cfg['POLICY']['GRID_MASK'] == True:
                 image = self.grid_mask(image)
                 goal_image = self.grid_mask(goal_image)
-            features = self.backbone.forward_features(image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, l, C)
+            if self.cfg['TRAIN']['LR_BACKBONE'] > 0:
+                features = self.backbone.forward_features(image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, l, C)
+                goal_feature = self.backbone.forward_features(goal_image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, goal_l, C)
+            else:
+                with torch.no_grad():
+                    features = self.backbone.forward_features(image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, l, C)
+                    goal_feature = self.backbone.forward_features(goal_image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, goal_l, C)
+
             features = self.input_proj(features)
             src = features.view(bs, -1, self.hidden_dim).permute(1, 0, 2)   # Left shape: (num_cam * l, B, C)
             image_pos_embed = self.image_pos_embed.weight[None, None, :, :].expand(bs, num_cam, -1, -1)  # (B, num_cam, l, C)
             pos = image_pos_embed.reshape(bs, -1, self.hidden_dim).permute(1, 0, 2)  # Left shape: (num_cam * l, B, C)
 
-            goal_feature = self.backbone.forward_features(goal_image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, goal_l, C)
             goal_feature = self.input_proj(goal_feature)   # Left shape: (bs * num_cam, goal_l, C)
             goal_feature = goal_feature.view(bs, -1, self.hidden_dim).permute(1, 0, 2)  # Left shape: (num_cam * goal_l, B, C)
             goal_pos_embed = self.goal_pos_embed.weight[None, None, :, :].expand(bs, num_cam, -1, -1)  # (B, num_cam, goal_l, C)
@@ -162,9 +168,9 @@ class DroidPretrainDETR(nn.Module):
 
         a_hat = self.action_head(hs)    # left shape: (num_dec, B, num_query, action_dim)
         if self.cfg['POLICY']['OUTPUT_MODE'] == 'relative': # Only the robotic arm joint is controlled with relative signal, the gripper is still controlled absolutely.
-            cur_status = end_obs[:, -1, :7][:, None, :] # left shape: (B, 1, action_dim)
+            cur_status = end_obs[:, -1, :6][:, None, :] # left shape: (B, 1, action_dim)
             if is_training: cur_status = cur_status[None]   # left shape: (1, B, 1, action_dim)
-            a_hat[..., :7] = a_hat[..., :7] + cur_status
+            a_hat[..., :6] = a_hat[..., :6] + cur_status
         elif self.cfg['POLICY']['OUTPUT_MODE'] == 'absolute':
             pass
         else:

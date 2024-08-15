@@ -19,6 +19,7 @@ from typing import Dict, Optional
 from pyquaternion import Quaternion
 from filterpy.kalman import KalmanFilter
 import matplotlib.pyplot as plt
+from scipy.spatial.transform import Rotation
 from itertools import combinations
 
 import leap_motion
@@ -27,11 +28,8 @@ from gripper_singlebox import GripperSingleBox
 from gripper_fixedboxes import GripperFixedBoxes
 from gripper_singlecolorbox import GripperSingleColorBox
 from gripper_fiveboxred import GripperFiveBoxRed
-
-leap_mode = 'right'
-leap_conf_thre = 0.3
-palm_xyz_range = dict(x_min = -150, x_max = 150, y_min = 150, y_max = 600, z_min = -150, z_max = 150)
-franka_xyz_range = dict(x_min = 0.2, x_max = 0.8, y_min = -0.5, y_max = 0.5, z_min = 0.4, z_max = 0.8)
+from gripper_boltnut import GripperBoltNut
+from gripper_gearinsertion import GripperGearInsertion
     
 class TrajectoryFilter9D:
     def __init__(self):
@@ -63,56 +61,71 @@ class TrajectoryFilter9D:
         return self.kf.x[:9]
 
 
-def update_pos_action(isaac_env, kf = None):
-    global leap_mode, leap_conf_thre, palm_xyz_range, franka_xyz_range 
+def update_pos_action(isaac_env, kf = None, scroll_flag = False):
+    global leap_mode, leap_conf_thre, palm_xyz_range, franka_xyz_range, scroll_T, scroll_cnt
 
     hand_pos = isaac_env.rb_states[isaac_env.hand_idxs, :3]
     hand_rot = isaac_env.rb_states[isaac_env.hand_idxs, 3:7]
-    hand = leap_motion.get_hand(mode = leap_mode, conf_thre = leap_conf_thre)
-
-    if hand == None: return None
-    hand_palm_direction = [hand.palm.direction.x, -hand.palm.direction.y, hand.palm.direction.z]
-    hand_palm_normal = [hand.palm.normal.x, -hand.palm.normal.y, hand.palm.normal.z]
-    hand_orientation = leap_motion.vector_to_quaternion(hand_palm_direction, hand_palm_normal)
-
-    hand_x, hand_y, hand_z = hand.palm.position.x, hand.palm.position.y, hand.palm.position.z
-    hand_x = np.clip(hand_x, palm_xyz_range['x_min'], palm_xyz_range['x_max'])
-    hand_y = np.clip(hand_y, palm_xyz_range['y_min'], palm_xyz_range['y_max'])
-    hand_z = np.clip(hand_z, palm_xyz_range['z_min'], palm_xyz_range['z_max'])
-    hand_x = 1 - (hand_x - palm_xyz_range['x_min']) / (palm_xyz_range['x_max'] - palm_xyz_range['x_min'])   # Correspond to the left-right axis of robot hand.
-    hand_y = (hand_y - palm_xyz_range['y_min']) / (palm_xyz_range['y_max'] - palm_xyz_range['y_min'])   # Correspond to the up-down axis of robot hand.
-    hand_z = (hand_z - palm_xyz_range['z_min']) / (palm_xyz_range['z_max'] - palm_xyz_range['z_min'])    # Correspond to the forward-backward axis of robot hand.
     
-    ctrl_x = hand_x * (franka_xyz_range['x_max'] - franka_xyz_range['x_min']) + franka_xyz_range['x_min']
-    ctrl_y = hand_z * (franka_xyz_range['y_max'] - franka_xyz_range['y_min']) + franka_xyz_range['y_min']
-    ctrl_z = hand_y * (franka_xyz_range['z_max'] - franka_xyz_range['z_min']) + franka_xyz_range['z_min']
+    if not scroll_flag:
+        hand = leap_motion.get_hand(mode = leap_mode, conf_thre = leap_conf_thre)
 
-    pinch_strength = 1 - hand.pinch_strength
-    pinch_strength = np.clip((pinch_strength - 0.5) / (1 - 0.5), 0, 1)
-    gripper_ctrl = pinch_strength * (isaac_env.franka_upper_limits[7:] - isaac_env.franka_lower_limits[7:]) + isaac_env.franka_lower_limits[7:]
+        if hand == None: return None
+        hand_palm_direction = [hand.palm.direction.x, -hand.palm.direction.y, hand.palm.direction.z]
+        hand_palm_normal = [hand.palm.normal.x, -hand.palm.normal.y, hand.palm.normal.z]
+        hand_orientation = leap_motion.vector_to_quaternion(hand_palm_direction, hand_palm_normal)
+        hand_x, hand_y, hand_z = hand.palm.position.x, hand.palm.position.y, hand.palm.position.z
+        hand_x = np.clip(hand_x, palm_xyz_range['x_min'], palm_xyz_range['x_max'])
+        hand_y = np.clip(hand_y, palm_xyz_range['y_min'], palm_xyz_range['y_max'])
+        hand_z = np.clip(hand_z, palm_xyz_range['z_min'], palm_xyz_range['z_max'])
+        hand_x = 1 - (hand_x - palm_xyz_range['x_min']) / (palm_xyz_range['x_max'] - palm_xyz_range['x_min'])   # Correspond to the left-right axis of robot hand.
+        hand_y = (hand_y - palm_xyz_range['y_min']) / (palm_xyz_range['y_max'] - palm_xyz_range['y_min'])   # Correspond to the up-down axis of robot hand.
+        hand_z = (hand_z - palm_xyz_range['z_min']) / (palm_xyz_range['z_max'] - palm_xyz_range['z_min'])    # Correspond to the forward-backward axis of robot hand.
+        
+        ctrl_x = hand_x * (franka_xyz_range['x_max'] - franka_xyz_range['x_min']) + franka_xyz_range['x_min']
+        ctrl_y = hand_z * (franka_xyz_range['y_max'] - franka_xyz_range['y_min']) + franka_xyz_range['y_min']
+        ctrl_z = hand_y * (franka_xyz_range['z_max'] - franka_xyz_range['z_min']) + franka_xyz_range['z_min']
 
-    action = np.concatenate((np.array([ctrl_x, ctrl_y, ctrl_z]), hand_orientation.elements, gripper_ctrl), axis = 0)
-    if kf != None:
-        if kf.initial_flag == False:
-            kf.set_initial_state(action)
-            filter_action = action
-            kf.initial_flag = True
+        pinch_strength = 1 - hand.pinch_strength
+        pinch_strength = np.clip((pinch_strength - 0.5) / (1 - 0.5), 0, 1)
+        gripper_ctrl = pinch_strength * (isaac_env.franka_upper_limits[7:] - isaac_env.franka_lower_limits[7:]) + isaac_env.franka_lower_limits[7:]
+
+        action = np.concatenate((np.array([ctrl_x, ctrl_y, ctrl_z]), hand_orientation.elements, gripper_ctrl), axis = 0)
+        if kf != None:
+            if kf.initial_flag == False:
+                kf.set_initial_state(action)
+                filter_action = action
+                kf.initial_flag = True
+            else:
+                filter_action = kf.filter(action)
         else:
-            filter_action = kf.filter(action)
-    else:
-        filter_action = action
+            filter_action = action
+        
+        goal_pos = torch.Tensor(filter_action[:3][None]).to(hand_pos.device)
+        goal_rot = torch.Tensor(filter_action[3:7][None]).to(hand_rot.device)
+        goal_gripper = torch.Tensor(filter_action[7:][None]).to(hand_rot.device) 
+        
+        pos_err = goal_pos - hand_pos
+        orn_err = isaac_env.orientation_error(goal_rot, hand_rot)
 
-    goal_pos = torch.Tensor(filter_action[:3][None]).to(hand_pos.device)
-    goal_rot = torch.Tensor(filter_action[3:7][None]).to(hand_rot.device)
-    goal_gripper = torch.Tensor(filter_action[7:][None]).to(hand_rot.device) 
+        '''goal_euler = Rotation.from_quat(goal_rot[0].cpu().numpy()).as_euler('xyz', degrees=True)
+        hand_euler = Rotation.from_quat(hand_rot[0].cpu().numpy()).as_euler('xyz', degrees=True)
+        print('goal_euler: {}, hand_euler: {}'.format(goal_euler, hand_euler))'''
+        
+        dpose = torch.cat([pos_err, orn_err], -1).unsqueeze(-1)
+        arm_ctrl = isaac_env.dof_pos.squeeze(-1)[:, :7] + isaac_env.control_ik(dpose)   # Control all joints except the gripper.
+        isaac_env.pos_action[:, :7] = arm_ctrl
+        isaac_env.pos_action[:, 7:9] = goal_gripper
     
-    pos_err = goal_pos - hand_pos
-    orn_err = isaac_env.orientation_error(goal_rot, hand_rot)
-    
-    dpose = torch.cat([pos_err, orn_err], -1).unsqueeze(-1)
-    arm_ctrl = isaac_env.dof_pos.squeeze(-1)[:, :7] + isaac_env.control_ik(dpose)   # Control all joints except the gripper.
-    isaac_env.pos_action[:, :7] = arm_ctrl
-    isaac_env.pos_action[:, 7:] = goal_gripper
+    else:
+        gripper_ctrl = isaac_env.franka_lower_limits[7:]
+        scroll_ctrl = ((isaac_env.franka_lower_limits - isaac_env.franka_upper_limits) * min(1, scroll_cnt / scroll_T) + isaac_env.franka_upper_limits)[6:7]
+        cur_joint_pose = isaac_env.dof_pos.clone().squeeze(-1)
+        cur_joint_pose[:, 6:7] = torch.Tensor(scroll_ctrl).to(cur_joint_pose.device)[None]
+        cur_joint_pose[:, 7:9] = torch.Tensor(gripper_ctrl).to(cur_joint_pose.device)[None]
+        isaac_env.pos_action = cur_joint_pose
+        filter_action = np.concatenate((hand_pos[0].cpu().numpy(), hand_rot[0].cpu().numpy(), gripper_ctrl), axis = 0)
+        scroll_cnt += 1
 
     #print_hand_rot = np.array(Quaternion(hand_rot[0].cpu().numpy()).yaw_pitch_roll[::-1]) / math.pi * 180
     #print_goal_rot = np.array(Quaternion(goal_rot[0].cpu().numpy()).yaw_pitch_roll[::-1]) / math.pi * 180
@@ -127,7 +140,7 @@ def update_pos_action(isaac_env, kf = None):
 class SaveDataManager():
     def __init__(self, data_root, start_idx = None):
         self.data_root = data_root
-        assert os.path.exists(self.data_root), "The path {} does not exist.".fsormat(self.data_root)
+        assert os.path.exists(self.data_root), "The path {} does not exist.".format(self.data_root)
         if start_idx != None:
             self.episode_index = start_idx
         elif os.path.exists(os.path.join(self.data_root, "h5py")):
@@ -221,11 +234,17 @@ def collect_data_main(task_name, save_data_path = ""):
         isaac_env = GripperSingleColorBox(num_envs = 1)
     elif task_name == 'isaac_fiveboxred':
         isaac_env = GripperFiveBoxRed(num_envs = 1)
+    elif task_name == 'isaac_boltnut':
+        isaac_env = GripperBoltNut(num_envs = 1)
+    elif task_name == 'isaac_gearinsertion':
+        isaac_env = GripperGearInsertion(num_envs = 1)
     kf = TrajectoryFilter9D()
 
     simulation_step = 0
     last_step = 0
     ctrl_min_step = 2
+    scroll_flag, last_scroll_flag = False, False
+    last_scroll_simulation_step = None
     print('\033[93m' + "Task instruction: {}".format(isaac_env.task_instruction[0]) + '\033[0m')
     with leap_connection.open():
             leap_connection.set_tracking_mode(leap_motion.leap.TrackingMode.Desktop)
@@ -238,7 +257,7 @@ def collect_data_main(task_name, save_data_path = ""):
                 isaac_env.update_simulator_before_ctrl()
                 leap_flag = leap_motion.get_hand(mode = leap_mode, conf_thre = leap_conf_thre) != None
                 if leap_flag:
-                    ego = update_pos_action(isaac_env, kf)
+                    ego = update_pos_action(isaac_env, kf, scroll_flag = scroll_flag)
                     if step_flag and ego != None:
                         isaac_env.update_action_map()
                         action, observations = ego
@@ -254,6 +273,8 @@ def collect_data_main(task_name, save_data_path = ""):
                     observations_list.append(observations)
                     images_list.append(images)
                     
+                last_scroll_flag = scroll_flag
+                scroll_flag = False
                 key = cv2.waitKey(1)
                 if key == ord('q'):
                     print('Quit')
@@ -271,6 +292,16 @@ def collect_data_main(task_name, save_data_path = ""):
                     save_data_manager.save_data(action_list = action_list, observations_list = observations_list, images_list = images_list, task_instruction = isaac_env.task_instruction[0], seed = isaac_env.random_seed)
                     isaac_env.init_simulate_env()
                     print('\033[93m' + "Task instruction: {}".format(isaac_env.task_instruction[0]) + '\033[0m')
+                elif key == ord('c'):
+                    scroll_flag = True
+                    last_scroll_simulation_step = simulation_step
+
+                # Avoid 'c' key jitter
+                if last_scroll_simulation_step != None and simulation_step - last_scroll_simulation_step <= 3:
+                    scroll_flag = True
+                if last_scroll_flag == False and scroll_flag == True:
+                    global scroll_cnt
+                    scroll_cnt = 0
 
                 simulation_step += 1
 
@@ -278,8 +309,16 @@ def collect_data_main(task_name, save_data_path = ""):
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    task_name = 'isaac_multicolorbox'
-    save_data_path = '/home/cvte/twilight/data/isaac_multicolorbox'
+    task_name = 'isaac_gearinsertion'
+    save_data_path = '/home/cvte/twilight/data/isaac_gearinsertion'
+
+    leap_mode = 'right'
+    leap_conf_thre = 0.3
+    palm_xyz_range = dict(x_min = -150, x_max = 150, y_min = 150, y_max = 600, z_min = -150, z_max = 150)
+    franka_xyz_range = dict(x_min = 0.2, x_max = 0.8, y_min = -0.5, y_max = 0.5, z_min = 0.4, z_max = 0.8)
+    scroll_T = 300
+    scroll_cnt = 0
+
     collect_data_main(task_name = task_name, save_data_path = save_data_path)
 
     #collect_data_main(task_name = task_name)
