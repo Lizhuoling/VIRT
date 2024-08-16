@@ -1,10 +1,13 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 """
-DETR model and criterion classes.
+DETR model
+import and criterion classes.
 """
 import pdb
+import copy
 import torch
 from torch import nn
+from torch.nn import functional as F
 from torch.autograd import Variable
 from transformers import AutoTokenizer, CLIPTextModelWithProjection
 
@@ -44,6 +47,8 @@ class DroidPretrainDETR(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.backbone = backbone
+        if self.cfg['TRAIN']['FEATURE_REGULARIZATION']:
+            self.init_backbone = [copy.deepcopy(backbone).cuda()]  # The list prevents the copied backbone from being registered.
         self.chunk_size = chunk_size
         self.camera_names = camera_names
         self.transformer = transformer
@@ -119,6 +124,14 @@ class DroidPretrainDETR(nn.Module):
                     features = self.backbone.forward_features(image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, l, C)
                     goal_feature = self.backbone.forward_features(goal_image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, goal_l, C)
 
+            if self.cfg['TRAIN']['FEATURE_REGULARIZATION']:
+                with torch.no_grad():
+                    init_features = self.init_backbone[0].forward_features(image)['x_norm_patchtokens'] # Left shape: (bs * num_cam, l, C)
+                    init_goal_feature = self.init_backbone[0].forward_features(goal_image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, goal_l, C)
+                reat_regu_loss = F.l1_loss(features, init_features, reduction='none').mean(dim = (1, 2)).sum() + F.l1_loss(goal_feature, init_goal_feature, reduction='none').mean(dim = (1, 2)).sum()
+            else:
+                reat_regu_loss = None
+
             features = self.input_proj(features)
             src = features.view(bs, -1, self.hidden_dim).permute(1, 0, 2)   # Left shape: (num_cam * l, B, C)
             image_pos_embed = self.image_pos_embed.weight[None, None, :, :].expand(bs, num_cam, -1, -1)  # (B, num_cam, l, C)
@@ -181,7 +194,7 @@ class DroidPretrainDETR(nn.Module):
         else:
             a_hat_uncern = None
         
-        return a_hat, a_hat_uncern
+        return a_hat, a_hat_uncern, reat_regu_loss
     
 def mlp(input_dim, hidden_dim, output_dim, hidden_depth):
     if hidden_depth == 0:

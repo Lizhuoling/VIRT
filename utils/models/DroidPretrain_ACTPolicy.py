@@ -13,13 +13,15 @@ class DroidPretrain_ACTPolicy(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
+        self.feat_regu_loss_weight = 5
+
         model = get_DroidPretrain_ACT_model(cfg)
         self.model = model.cuda()
 
     def __call__(self, image, goal_image, past_action, action, end_obs, joint_obs, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction_list):
         env_state = None
         if action is not None: # training or validation time
-            a_hat, a_hat_uncern = self.model(image = image, goal_image = goal_image, past_action = past_action, action = action, end_obs = end_obs, joint_obs = joint_obs, \
+            a_hat, a_hat_uncern, reat_regu_loss = self.model(image = image, goal_image = goal_image, past_action = past_action, action = action, end_obs = end_obs, joint_obs = joint_obs, \
                             observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list)
             loss_dict = dict()
             all_l1 = F.l1_loss(action.unsqueeze(0).expand(a_hat.shape[0], -1, -1, -1), a_hat, reduction='none') # Left shape: (num_dec, B, num_query, num_action)
@@ -35,6 +37,11 @@ class DroidPretrain_ACTPolicy(nn.Module):
             valid_count = torch.clip((~action_is_pad)[None].sum(dim = -1), min = 1)  # Left shape: (num_dec,)
             l1 = (uncern_l1 / valid_count).mean(dim = -1)    # Left shape: (num_dec,)
             total_loss = l1.sum()
+
+            if self.cfg['TRAIN']['FEATURE_REGULARIZATION']:
+                reat_regu_loss = self.feat_regu_loss_weight * reat_regu_loss
+                total_loss = total_loss + reat_regu_loss
+                loss_dict['feat_regu'] = reat_regu_loss.item()
 
             if self.cfg['POLICY']['USE_UNCERTAINTY']:
                 l1_without_uncern = (mask_l1.sum(-1) / valid_count).mean(dim = -1)  # Left shape: (num_dec,)

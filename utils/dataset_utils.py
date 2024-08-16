@@ -108,7 +108,7 @@ def load_data(cfg):
     if is_debug:
         num_workers = 0
     else:
-        num_workers = 4
+        num_workers = 3
     
     train_sample_per_gpu = cfg['TRAIN']['BATCH_SIZE'] // comm.get_world_size()
     train_sampler = samplers.TrainingSampler(len(train_dataset))

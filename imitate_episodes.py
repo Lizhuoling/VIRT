@@ -39,6 +39,8 @@ def main(args):
     
     if cfg['SEED'] >= 0:
         set_seed(cfg['SEED'])
+    if cfg['IS_DEBUG']:
+        cfg['TRAIN']['BATCH_SIZE'] = 2
 
     if cfg['IS_EVAL']:
         if args.load_dir != '':
