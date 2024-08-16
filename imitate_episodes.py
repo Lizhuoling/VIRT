@@ -122,6 +122,8 @@ def eval_bc(cfg, ckpt_path, save_episode=True):
     elif cfg['TASK_NAME'] == 'isaac_fiveboxred':
         from utils.inference.isaac_fiveboxred import IsaacFiveBoxRedTestEnviManager
         envi_manager = IsaacFiveBoxRedTestEnviManager(cfg, policy, stats)
+    elif cfg['TASK_NAME'] == 'aloha_singleobjgrasp':
+        from utils.inference.aloha_singleobjgrasp import AlohaSingleObjGraspTestEnviManager
     else:
         raise NotImplementedError
 

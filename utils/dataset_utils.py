@@ -13,10 +13,10 @@ e = IPython.embed
 
 from utils import comm
 from utils import samplers
-from utils.datasets.act_dataset import ACTDataset, build_ACTTransforms
-from utils.datasets.isaac_gripper_dataset import IsaacGripperDataset, build_IsaacGripperTransforms
-from utils.datasets.droid_pretrain_dataset import DroidPretrainDataset, build_DroidPretrainTransforms
-from utils.datasets.aloha_gripper_dataset import AlohaGripperDataset, build_AlohaGripperTransforms
+from utils.dataset_loaders.act_dataset import ACTDataset, build_ACTTransforms
+from utils.dataset_loaders.isaac_gripper_dataset import IsaacGripperDataset, build_IsaacGripperTransforms
+from utils.dataset_loaders.droid_pretrain_dataset import DroidPretrainDataset, build_DroidPretrainTransforms
+from utils.dataset_loaders.aloha_gripper_dataset import AlohaGripperDataset, build_AlohaGripperTransforms
 
 def get_norm_stats(dataset_dir, norm_keys, norm_max_len = -1):
     norm_data_dict = {key: [] for key in norm_keys}

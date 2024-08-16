@@ -13,7 +13,7 @@ pip install opencv-python -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install matplotlib -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install einops -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install packaging -i https://pypi.tuna.tsinghua.edu.cn/simple
-pip install h5py
+pip install h5py -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install ipython -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install numpy==1.26.4 -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install xformers==0.0.27 -i https://pypi.tuna.tsinghua.edu.cn/simple

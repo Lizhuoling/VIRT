@@ -124,15 +124,9 @@ def run_gpt_api(app_infos,
 if __name__ == "__main__":
 
     response, response_info = run_gpt_api(app_infos=app_infos, 
-                user_prompt="I am doing a project about demonstration learning based robotic manipulation. I design a fully Transformer policy consisting of encoders and decoders. For \
-                    the input to the policy, I input not only robot status information, observation images of three views, and also vision instruction. The vision instruction is used to prompt \
-                    the policy what to do. We believe text information is insufficient to describe the task because the policy does not understand natural language and the data is not sufficient to \
-                    make it understand it. Therefore, during training, we use an external detector to recognize the object to manipulate and crop the image region of this target object. Then, we resize \
-                    the cropped image to the original image resolution and input it to the policy as vision instruction, which informs the policy about what object to manipulate. We find that the vision \
-                    instruction is very crucial for successful manipulation. If we replace the vision instruction as a text sentence that describes what to manipulate, the trained policy cannot learn \
-                    how to complete the desired task. However, this story is too naive to write in a paper. I need you to build a mathematical theory for this story \
-                    about why the vision instruction is crucial. The story should be written in a mathematical way and it can be as complex as possible.",
-                system_prompt="You are an expert in mathematics and information theory.",
+                user_prompt="When I use ssh on a Ubuntu system A to connect another Ubuntu computer B, an error is raised: agilex@172.17.167.122: Permission denied (publickey). \
+                    Notably, there is no .ssh/id_rsa in A. How to enter computer B using password directly?",
+                system_prompt="You are an expert in Computer.",
                 gpt_model="OPENAI_GPT_4_O_PREVIEW",
                 image_path=None)
 
