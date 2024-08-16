@@ -13,7 +13,7 @@ class DroidPretrain_ACTPolicy(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.feat_regu_loss_weight = 5
+        self.feat_regu_loss_weight = 100
 
         model = get_DroidPretrain_ACT_model(cfg)
         self.model = model.cuda()

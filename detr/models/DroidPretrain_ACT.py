@@ -128,7 +128,7 @@ class DroidPretrainDETR(nn.Module):
                 with torch.no_grad():
                     init_features = self.init_backbone[0].forward_features(image)['x_norm_patchtokens'] # Left shape: (bs * num_cam, l, C)
                     init_goal_feature = self.init_backbone[0].forward_features(goal_image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, goal_l, C)
-                reat_regu_loss = F.l1_loss(features, init_features, reduction='none').mean(dim = (1, 2)).sum() + F.l1_loss(goal_feature, init_goal_feature, reduction='none').mean(dim = (1, 2)).sum()
+                reat_regu_loss = F.l1_loss(features, init_features, reduction='none').mean() + F.l1_loss(goal_feature, init_goal_feature, reduction='none').mean()
             else:
                 reat_regu_loss = None
 
