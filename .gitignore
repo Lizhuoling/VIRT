@@ -2,7 +2,6 @@ bin
 logs
 wandb
 outputs
-data
 datasets
 data_local
 .vscode
