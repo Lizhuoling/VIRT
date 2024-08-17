@@ -59,7 +59,7 @@ class IsaacMultiColorBoxTestEnviManager():
                         action_mean, action_std = self.stats['action_mean'][None, None].to(all_cam_images.device), self.stats['action_std'][None, None].to(all_cam_images.device)
                         actions_pred = norm_actions_pred * action_std + action_mean
                         execution_step = 0
-                        cur_status = status_pred
+                        cur_status = status_pred.clone()
                     
                     if simulation_step - last_simulation_step >= self.cfg['EVAL']['CTRL_STEP_INTERVAL']:
                         # Save observation data

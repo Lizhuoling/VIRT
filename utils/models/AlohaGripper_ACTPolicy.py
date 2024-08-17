@@ -57,6 +57,6 @@ class AlohaGripper_ACTPolicy(nn.Module):
             
             return total_loss, loss_dict
         else: # inference time
-            a_hat, _, status_pred = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, \
-                            observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, task_instruction_list = task_instruction_list, status = status)
+            a_hat, _, status_pred = self.model(image = image, past_action = past_action, action = None, effort_obs = effort_obs, qpos_obs = qpos_obs, qvel_obs = qvel_obs, \
+                            observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = None, task_instruction = task_instruction, status = status)
             return a_hat, status_pred

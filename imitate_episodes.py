@@ -124,23 +124,27 @@ def eval_bc(cfg, ckpt_path, save_episode=True):
         envi_manager = IsaacFiveBoxRedTestEnviManager(cfg, policy, stats)
     elif cfg['TASK_NAME'] == 'aloha_singleobjgrasp':
         from utils.inference.aloha_singleobjgrasp import AlohaSingleObjGraspTestEnviManager
+        envi_manager = AlohaSingleObjGraspTestEnviManager(cfg, policy, stats)
     else:
         raise NotImplementedError
 
     reward_info = envi_manager.inference()
 
-    success_rate = reward_info['success_rate']
-    avg_return = reward_info['average_reward']
-    summary_str = f'\nSuccess rate: {success_rate}\nAverage return: {avg_return}\n\n'
+    if reward_info != None:
+        success_rate = reward_info['success_rate']
+        avg_return = reward_info['average_reward']
+        summary_str = f'\nSuccess rate: {success_rate}\nAverage return: {avg_return}\n\n'
 
-    print(summary_str)
+        print(summary_str)
 
-    # save success rate to txt
-    result_file_name = 'result_' + ckpt_name.split('.')[0] + '.txt'
-    with open(os.path.join(ckpt_dir, result_file_name), 'w') as f:
-        f.write(summary_str)
+        # save success rate to txt
+        result_file_name = 'result_' + ckpt_name.split('.')[0] + '.txt'
+        with open(os.path.join(ckpt_dir, result_file_name), 'w') as f:
+            f.write(summary_str)
 
-    return success_rate, avg_return
+        return success_rate, avg_return
+    else:
+        return 0.0, 0.0
 
 
 def forward_pass(data, policy, cfg):
