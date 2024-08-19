@@ -26,6 +26,8 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install -e . -i https://pypi.tuna.tsinghua.edu.cn/simple
 cd ..
 
+python setup.py develop
+
 # git clone https://gitee.com/twilightLZL/CLIP.git
 # cd CLIP
 # python setup.py develop

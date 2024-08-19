@@ -1,0 +1,77 @@
+TASK_NAME: 'sim_transfer_cube_scripted'
+
+SEED: -1
+NUM_NODES: 1
+IS_EVAL: False
+IS_DEBUG: False
+CKPT_DIR: "./outputs/debug"
+DATASET_DIR: "./data/sim_transfer_cube_scripted"
+ONSCREEN_RENDER: False
+
+POLICY:
+  POLICY_NAME: "ACT"
+  BACKBONE: "resnet18"
+  BACKBONE_PATH: "./pretrained/dinov2_vits14_pretrain.pth"
+  USE_VAE: False
+  KL_WEIGHT: 10
+  CHUNK_SIZE: 100
+  HIDDEN_DIM: 512
+  DIM_FEEDFORWARD: 3200
+  EPISODE_LEN: 400
+  TEMPORAL_AGG: False
+  STATE_DIM: 14
+  POSITION_EMBEDDING: 'sine'
+  DROPOUT: 0.1
+  NHEADS: 8
+  ENC_LAYERS: 4
+  DEC_LAYERS: 7
+  OUTPUT_MODE: 'absolute'
+  USE_UNCERTAINTY: False
+  UNCERTAINTY_RANGE: [-10, 10]
+  EXTERNAL_DET: None
+  EXTERNAL_DET_SCALE_FACTOR: 4.0
+  YOLO_PATH: "./pretrained/yolov10_airphonebox.pt"
+  STATUS_NUM: 1
+  STATUS_PREDICT: False
+  GRID_MASK: False
+
+TRAIN:
+  NUM_ITERATIONS: 100000
+  SAVE_CHECKPOINT_INTERVAL: 50000
+  LOG_INTERVAL: 100
+  DECAY_LR_ITER_STEPS: []
+  LR_WARMUP: False
+  WARMUP_STEPS: 1000
+  OPTIMIZER: 'adamw'
+  LR: 0.00001
+  LR_BACKBONE: 0.00001
+  LR_DECAY: 0.1
+  LR_CLIP: 0.0000001 # minimal learning rate
+  CLIP_PATH: "./pretrained/CLIP_ckpts"
+  WEIGHT_DECAY: 0.0001
+  BATCH_SIZE: 8
+  DATA_SAMPLE_MODE: 'random'
+  FEATURE_REGULARIZATION: False
+
+EVAL:
+  BATCH_SIZE: 8
+  DATA_EVAL_RATIO: 0.01
+  EVAL_INTERVAL: 100000
+  MAX_VAL_SAMPLE_NUM: 300
+  REAL_ROBOT: False
+  INFERENCE_MAX_STEPS: 600
+  TEST_ENVI_NUM: 1
+  TEST_ENVI_BATCH_NUM: 1
+  CTRL_STEP_INTERVAL: 2
+
+DATA:
+  CAMERA_NAMES: ['top']
+  IMG_RESIZE_SHAPE: [320, 240]
+  INPUT_KEYS: ['action', 'observations/qpos', 'observations/images/top',]
+  NORM_KEYS: ['action', 'observations/qpos',]
+  NORM_MAX_LEN: 1000
+  IMG_NORM_MEAN: [0.485, 0.456, 0.406]
+  IMG_NORM_STD: [0.229, 0.224, 0.225]
+  PAST_OBSERVATION_LEN: 1
+  PAST_ACTION_LEN: 1
+  LOAD_INDICE_PATH: ""
