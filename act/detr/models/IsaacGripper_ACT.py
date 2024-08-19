@@ -3,10 +3,12 @@
 DETR model and criterion classes.
 """
 import pdb
+import copy
 import torch
 from torch import nn
 from torch.autograd import Variable
 from transformers import AutoTokenizer, CLIPTextModelWithProjection
+from torch.nn import functional as F
 
 from .backbone import build_backbone
 from .transformer import build_transformer, TransformerEncoder, TransformerEncoderLayer
@@ -45,6 +47,8 @@ class IsaacGripperDETR(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.backbone = backbone
+        if self.cfg['TRAIN']['FEATURE_REGULARIZATION']:
+            self.init_backbone = [copy.deepcopy(backbone).cuda()]  # The list prevents the copied backbone from being registered.
         self.chunk_size = chunk_size
         self.camera_names = camera_names
         self.transformer = transformer
@@ -135,19 +139,29 @@ class IsaacGripperDETR(nn.Module):
             if is_training and self.cfg['POLICY']['GRID_MASK'] == True:
                 image = self.grid_mask(image)
             features = self.backbone.forward_features(image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, l, C)
-            features = self.input_proj(features)
-            src = features.view(bs, -1, self.hidden_dim).permute(1, 0, 2)   # Left shape: (num_cam * l, B, C)
+            proj_features = self.input_proj(features)
+            src = proj_features.view(bs, -1, self.hidden_dim).permute(1, 0, 2)   # Left shape: (num_cam * l, B, C)
             image_pos_embed = self.image_pos_embed.weight[None, None, :, :].expand(bs, num_cam, -1, -1)  # (B, num_cam, l, C)
             pos = image_pos_embed.reshape(bs, -1, self.hidden_dim).permute(1, 0, 2)  # Left shape: (num_cam * l, B, C)
 
             if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
                 roi_feature = self.backbone.forward_features(roi_img)['x_norm_patchtokens']  # Left shape: (bs * num_cam, roi_l, C)
-                roi_feature = self.input_proj(roi_feature).view(bs, num_cam, -1, self.hidden_dim)   # Left shape: (bs, num_cam, roi_l, C)
-                roi_feature = roi_feature + roi_box_emb[:, :, None] # Left shape: (bs, num_cam, roi_l, C)
-                roi_feature = roi_feature.view(bs, -1, self.hidden_dim).permute(1, 0, 2)  # Left shape: (num_cam * roi_l, B, C)
-                src = torch.cat((src, roi_feature), dim = 0)  # Left shape: (l, B, C)
+                proj_roi_feature = self.input_proj(roi_feature).view(bs, num_cam, -1, self.hidden_dim)   # Left shape: (bs, num_cam, roi_l, C)
+                proj_roi_feature = proj_roi_feature + roi_box_emb[:, :, None] # Left shape: (bs, num_cam, roi_l, C)
+                proj_roi_feature = proj_roi_feature.view(bs, -1, self.hidden_dim).permute(1, 0, 2)  # Left shape: (num_cam * roi_l, B, C)
+                src = torch.cat((src, proj_roi_feature), dim = 0)  # Left shape: (l, B, C)
                 roi_pos = self.roi_pos.weight[None, :, :].expand(bs, -1, -1).permute(1, 0, 2)  # Left shape: (num_cam * l, B, C)
                 pos = torch.cat((pos, roi_pos), axis = 0)  # Left shape: (num_cam * l, B, C)
+
+            if self.cfg['TRAIN']['FEATURE_REGULARIZATION']:
+                with torch.no_grad():
+                    init_features = self.init_backbone[0].forward_features(image)['x_norm_patchtokens'] # Left shape: (bs * num_cam, l, C)
+                    feat_regu_loss = F.l1_loss(features, init_features, reduction='none').mean() 
+                    if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
+                        init_goal_feature = self.init_backbone[0].forward_features(roi_img)['x_norm_patchtokens']  # Left shape: (bs * num_cam, goal_l, C)
+                        feat_regu_loss = feat_regu_loss+ F.l1_loss(roi_feature, init_goal_feature, reduction='none').mean()
+            else:
+                feat_regu_loss = None
         else:
             raise NotImplementedError
         mask = torch.zeros((bs, src.shape[0]), dtype=torch.bool).to(image.device)   # Left shape: (B, NHW)
@@ -206,7 +220,7 @@ class IsaacGripperDETR(nn.Module):
         else:
             a_hat_uncern = None
         
-        return a_hat, a_hat_uncern, status_pred
+        return a_hat, a_hat_uncern, status_pred, feat_regu_loss
     
 def mlp(input_dim, hidden_dim, output_dim, hidden_depth):
     if hidden_depth == 0:

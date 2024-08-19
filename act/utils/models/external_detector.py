@@ -51,7 +51,7 @@ class AlohaYOLOv10():
         sample_img = sample_img.view(bs, num_cam, 1, ch, sample_img.shape[-2], sample_img.shape[-1])    # Left shape: (bs, num_cam, 1, ch, img_h, img_w)
 
         # vis
-        vis_img = (denorm_img[2].permute(1, 2, 0) * 255).cpu().numpy().astype(np.uint8)
+        '''vis_img = (denorm_img[2].permute(1, 2, 0) * 255).cpu().numpy().astype(np.uint8)
         vis_img = np.ascontiguousarray(vis_img[:, :, ::-1])
         box = rescale_det_box[0, 1:].cpu().numpy()
         vis_img = cv2.rectangle(vis_img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 255, 0), 2)
@@ -59,7 +59,7 @@ class AlohaYOLOv10():
         vis_img = ((sample_img * self.norm_std[:, :, None] + self.norm_mean[:, :, None])[0, 2, 0].permute(1, 2, 0) * 255).cpu().numpy().astype(np.uint8)
         vis_img = np.ascontiguousarray(vis_img[:, :, ::-1])
         cv2.imwrite('vis.png', vis_img)
-        #pdb.set_trace()
+        #pdb.set_trace()'''
 
         det_boxes[:, 0] = det_boxes[:, 0] / img_w
         det_boxes[:, 1] = det_boxes[:, 1] / img_h

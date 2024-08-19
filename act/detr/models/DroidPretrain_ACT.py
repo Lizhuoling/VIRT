@@ -128,9 +128,9 @@ class DroidPretrainDETR(nn.Module):
                 with torch.no_grad():
                     init_features = self.init_backbone[0].forward_features(image)['x_norm_patchtokens'] # Left shape: (bs * num_cam, l, C)
                     init_goal_feature = self.init_backbone[0].forward_features(goal_image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, goal_l, C)
-                reat_regu_loss = F.l1_loss(features, init_features, reduction='none').mean() + F.l1_loss(goal_feature, init_goal_feature, reduction='none').mean()
+                feat_regu_loss = F.l1_loss(features, init_features, reduction='none').mean() + F.l1_loss(goal_feature, init_goal_feature, reduction='none').mean()
             else:
-                reat_regu_loss = None
+                feat_regu_loss = None
 
             features = self.input_proj(features)
             src = features.view(bs, -1, self.hidden_dim).permute(1, 0, 2)   # Left shape: (num_cam * l, B, C)
@@ -194,7 +194,7 @@ class DroidPretrainDETR(nn.Module):
         else:
             a_hat_uncern = None
         
-        return a_hat, a_hat_uncern, reat_regu_loss
+        return a_hat, a_hat_uncern, feat_regu_loss
     
 def mlp(input_dim, hidden_dim, output_dim, hidden_depth):
     if hidden_depth == 0:

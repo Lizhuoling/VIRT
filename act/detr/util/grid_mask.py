@@ -48,7 +48,7 @@ class GridMask(nn.Module):
         mask = np.asarray(mask)
         mask = mask[(hh-h)//2:(hh-h)//2+h, (ww-w)//2:(ww-w)//2+w]
 
-        mask = torch.from_numpy(mask).float().cuda()
+        mask = torch.from_numpy(mask.copy()).float().cuda()
         if self.mode == 1:
             mask = 1-mask
         mask = mask.expand_as(x)

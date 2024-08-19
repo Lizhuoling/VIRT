@@ -18,11 +18,12 @@ class IsaacGripper_ACTPolicy(nn.Module):
 
         self.CrossEntropyLoss = nn.CrossEntropyLoss()
         self.status_cls_loss_weight = 10
+        self.feat_regu_loss_weight = 100
 
     def __call__(self, image, past_action, end_obs, joint_obs, action=None, observation_is_pad = None, past_action_is_pad = None, action_is_pad = None, task_instruction_list = None, status = None):
         env_state = None
         if action is not None: # training or validation time
-            a_hat, a_hat_uncern, status_pred = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, action = action, \
+            a_hat, a_hat_uncern, status_pred, feat_regu_loss = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, action = action, \
                             observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list, status = status)
             loss_dict = dict()
             all_l1 = F.l1_loss(action.unsqueeze(0).expand(a_hat.shape[0], -1, -1, -1), a_hat, reduction='none') # Left shape: (num_dec, B, num_query, num_action)
@@ -45,6 +46,11 @@ class IsaacGripper_ACTPolicy(nn.Module):
                     loss_dict[f'status_pred_{dec_cnt}'] = status_pred_loss.item()
                     total_loss = total_loss + status_pred_loss
 
+            if self.cfg['TRAIN']['FEATURE_REGULARIZATION']:
+                feat_regu_loss = self.feat_regu_loss_weight * feat_regu_loss
+                total_loss = total_loss + feat_regu_loss
+                loss_dict['feat_regu'] = feat_regu_loss.item()
+
             if self.cfg['POLICY']['USE_UNCERTAINTY']:
                 l1_without_uncern = (mask_l1.sum(-1) / valid_count).mean(dim = -1)  # Left shape: (num_dec,)
                 total_l1_without_uncern = l1_without_uncern.sum()
@@ -57,7 +63,7 @@ class IsaacGripper_ACTPolicy(nn.Module):
             
             return total_loss, loss_dict
         else: # inference time
-            a_hat, _, status_pred = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, \
+            a_hat, _, status_pred, _ = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, \
                             observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, task_instruction_list = task_instruction_list, status = status)
             return a_hat, status_pred
 
