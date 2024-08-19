@@ -289,10 +289,12 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir = '', load_pretrain
         # Save checkpoint
         if main_thread and iter_cnt % cfg['TRAIN']['SAVE_CHECKPOINT_INTERVAL'] == 0 and iter_cnt != 0:
             ckpt_path = os.path.join(ckpt_dir, f'policy_latest.ckpt')
+            if os.path.exists(ckpt_path):
+                os.rename(ckpt_path, os.path.join(ckpt_dir, f'policy_previous.ckpt'))
             save_model(policy, ckpt_path, iter_cnt)
             
     if main_thread:
-        ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')
+        ckpt_path = os.path.join(ckpt_dir, f'policy_latest.ckpt')
         save_model(policy, ckpt_path, iter_cnt)
         logger.info(f'Training finished!')
 
