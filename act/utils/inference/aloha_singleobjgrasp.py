@@ -2,6 +2,7 @@ import pdb
 import math
 import numpy as np
 import time
+from collections import deque
 import cv2
 import torch
 from torchvision.transforms import functional as F
@@ -38,6 +39,9 @@ class AlohaSingleObjGraspTestEnviManager():
     
     def inference(self,):
         self.init_check()
+
+        if self.cfg['EVAL']['CHUNK_SMOOTH'] > 0:
+            action_deque = deque(maxlen = self.cfg['EVAL']['CHUNK_SMOOTH'])
         
         freq_controller = rospy.Rate(self.ros_args.publish_rate)
         with torch.inference_mode():
@@ -51,28 +55,53 @@ class AlohaSingleObjGraspTestEnviManager():
             qvel_obs_list = []
             latest_qpos_unnorm = None
             action_list = []
-            actions_pred = None
+            smooth_action_pred = None
             action_step, action_cnt = 0, 0 # action_step is the total actions number that have been executed, and action_cnt is the number in the local action sequence.
             
             while action_step < self.cfg['EVAL']['INFERENCE_MAX_STEPS'] and not rospy.is_shutdown():
                 # When no action has been predicted or all actions have been executed, the policy predicts new actions.
-                if actions_pred == None or action_cnt >= actions_pred.shape[1]:
+                if smooth_action_pred == None or action_cnt >= smooth_action_pred.shape[1] or self.cfg['EVAL']['CHUNK_SMOOTH'] > 0:
                     if len(action_list) == 0:   # This part will only be executed in the beginning of the inference.
                         norm_effort, norm_qpos, norm_qvel, imgs, latest_qpos_unnorm = self.get_observation()
                         effort_obs_list.append(norm_effort)
                         qpos_obs_list.append(norm_qpos)
                         qvel_obs_list.append(norm_qvel)
                         action_list.append(norm_qpos) # Initialize the first element with qpos observation
+
                     image, past_action, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, task_instruction, status = self.prepare_policy_input(effort_obs_list, qpos_obs_list, \
                                     qvel_obs_list, action_list, imgs, task_instruction, cur_status)
                     norm_actions_pred, status_pred = self.policy(image = image, past_action = past_action.float(), action = None, effort_obs = effort_obs.float(), qpos_obs = qpos_obs.float(), qvel_obs = qvel_obs.float(), \
                                     observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = None, task_instruction = task_instruction, status = status)  # Left shape: (1, T, 9)
                     action_mean, action_std = self.stats['action_mean'][None, None].to(image.device), self.stats['action_std'][None, None].to(image.device) # Left shape: (1, 1, action_dim), (1, 1, action_dim)
                     actions_pred = norm_actions_pred * action_std + action_mean
-                    actions_pred = actions_pred[:1]
-                    
-                    action_cnt = 0
-                    cur_status = status_pred.clone()
+
+                    # Run chunk smooth
+                    if self.cfg['EVAL']['CHUNK_SMOOTH'] > 0:
+                        assert self.cfg['EVAL']['CHUNK_SMOOTH'] <= self.cfg['POLICY']['CHUNK_SIZE'] 
+                        action_deque.append(actions_pred.cpu().numpy())
+
+                        if smooth_action_pred == None or action_cnt >= smooth_action_pred.shape[1]:
+                            action_queue = np.array(action_deque)[:, 0]   # action_queue shape: (queue_len, predict_len, joint_dim). action_queue[0] is the oldest element.
+                            
+                            shift_action_queue = np.zeros_like(action_queue)
+                            for i in range(action_queue.shape[0]):
+                                queue_idx = action_queue.shape[0] - i - 1 
+                                shift_action_queue[queue_idx, i : action_queue.shape[1]] = action_queue[queue_idx, 0 : action_queue.shape[1] - i]
+                            weight_matrix = np.broadcast_to(np.arange(action_queue.shape[0] - 1, -1, -1)[:, None, None], action_queue.shape)    # Left shape: (queue_len, predict_len, joint_dim).
+                            weight_decay_factor = -1  # Decrease this number to improve the impact of the newest estimation.
+                            weight_matrix = weight_matrix * weight_decay_factor
+                            weight_matrix[shift_action_queue == 0] = -99999
+                            weight_matrix = np.exp(weight_matrix)
+                            weight_matrix = weight_matrix / np.sum(weight_matrix, axis = 0, keepdims = True)    # Left shape: (queue_len, predict_len, joint_dim)
+                            smooth_action_pred = np.sum(shift_action_queue * weight_matrix, axis = 0, keepdims = True)    # Left shape: (1, predict_len, joint_dim)
+                            smooth_action_pred = torch.Tensor(smooth_action_pred).cuda() # Left shape: (1, predict_len, joint_dim).
+                            smooth_action_pred = smooth_action_pred[:, :self.cfg['EVAL']['VALID_CHUNK']]    # Left shape: (1, valid_chunk_size, joint_dim).
+                            action_cnt = 0
+                            cur_status = status_pred.clone()
+                    else:
+                        smooth_action_pred = actions_pred.clone()
+                        action_cnt = 0
+                        cur_status = status_pred.clone()
 
                 # Get and save observation data
                 norm_effort, norm_qpos, norm_qvel, imgs, latest_qpos_unnorm = self.get_observation()
@@ -81,15 +110,15 @@ class AlohaSingleObjGraspTestEnviManager():
                 qvel_obs_list.append(norm_qvel)
                 
                 # Execute an action
-                action_to_execute = actions_pred[0, action_cnt].clone() # Left shape: (joint_dim,)
-                interp_flag = (actions_pred[0, action_cnt] - latest_qpos_unnorm).abs() > self.init_moving_max_gap
+                action_to_execute = smooth_action_pred[0, action_cnt].clone() # Left shape: (joint_dim,)
+                interp_flag = (smooth_action_pred[0, action_cnt] - latest_qpos_unnorm).abs() > self.init_moving_max_gap
                 interp_flag = interp_flag.cpu()
                 interp_flag[[6, 13]] = False    # The gripper closing does not need to be interpolated.
                 interp_flag = interp_flag.cuda()
                 if interp_flag.sum() == 0:  # No interpolation is needed
                     action_cnt += 1
                 else:
-                    action_to_execute = torch.where(interp_flag, latest_qpos_unnorm + (actions_pred[0, action_cnt] - latest_qpos_unnorm).sign() * self.init_moving_max_gap, action_to_execute)
+                    action_to_execute = torch.where(interp_flag, latest_qpos_unnorm + (smooth_action_pred[0, action_cnt] - latest_qpos_unnorm).sign() * self.init_moving_max_gap, action_to_execute)
                 norm_action_to_execute = (action_to_execute - self.stats['action_mean'].cuda()) / self.stats['action_std'].cuda()   # Left shape: (joint_dim,)
                 action_list.append(norm_action_to_execute[None])
                 left_action = action_to_execute[:7]
