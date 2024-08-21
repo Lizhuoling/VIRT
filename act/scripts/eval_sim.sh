@@ -1,5 +1,5 @@
-exp_id=isaac_multicolorbox_backboneregu
-config_name=isaac_multicolorbox
+exp_id=isaac_multicolorbox_gridmask
+config_name=isaac_multicolorbox_gridmask
 
 nnodes=1
 nproc_per_node=1

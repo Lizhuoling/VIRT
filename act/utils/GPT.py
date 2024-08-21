@@ -124,7 +124,7 @@ def run_gpt_api(app_infos,
 if __name__ == "__main__":
 
     response, response_info = run_gpt_api(app_infos=app_infos, 
-                user_prompt="有一个形状为(n, l)的numpy array表示为a，如何让其第一行不变，第二行取后l-1个元素并让第一个元素补0从而维持长度为i，第i行取后l-i+1个元素并在前面补i-1个0，请用torch或numpy高效实现。",
+                user_prompt="有什么牌子的饮料的瓶身是硬的（例如玻璃瓶，不过如果是不易摔坏的塑料的更好），打开方式是拧瓶盖拧开，请回答饮料的名称",
                 system_prompt="You are an expert in Computer.",
                 gpt_model="OPENAI_GPT_4_O_PREVIEW",
                 image_path=None)

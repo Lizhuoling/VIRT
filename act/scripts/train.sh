@@ -1,5 +1,5 @@
-exp_id=aloha_singleobjgrasp_chunk32
-config_name=aloha_singleobjgrasp_chunk32
+exp_id=isaac_multicolorbox_pretrain
+config_name=isaac_multicolorbox
 
 nnodes=1
 nproc_per_node=1
@@ -11,9 +11,9 @@ CUDA_VISIBLE_DEVICES=1 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_nod
     imitate_episodes.py \
     --config_name $config_name \
     --save_dir ./outputs/$exp_id \
-    --data_dir datasets/aloha_singleobj_grasp \
+    --data_dir datasets/isaac_multicolorbox \
     --num_nodes $nnodes \
-    --load_pretrain outputs/pretrained_weight/droid_pretrain_dec_114k.ckpt \
+    --load_pretrain outputs/droid_pretrain2/policy_latest.ckpt \
     #--debug \
     #--real_robot \
     #--load_dir outputs/droid_pretrain_dec/policy_latest.ckpt \
