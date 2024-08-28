@@ -392,7 +392,8 @@ def collect_data_main(task_name, save_data_path = "", total_episodes = 1):
                 if ros_args.use_depth_image: depth_images_list.append(img_depth_dict)
                 if ros_args.use_robot_base: base_vel_list.append(base_vel)
 
-            cv2.imshow('front view', np.ascontiguousarray(img_front[:, :, ::-1]))
+            vis_img = np.ascontiguousarray(np.concatenate((img_left[:, :, ::-1], img_front[:, :, ::-1], img_right[:, :, ::-1]), axis = 1))
+            cv2.imshow('camera views', vis_img)
             key = cv2.waitKey(1)
             if key == ord('b'):
                 print('Begin collect data')
@@ -414,7 +415,7 @@ def collect_data_main(task_name, save_data_path = "", total_episodes = 1):
 
 
 if __name__ == '__main__':
-    task_name = 'aloha_singleobjgrasp'
-    save_data_path = '/home/agilex/twilight/data/aloha_singleobj_grasp'
+    task_name = 'aloha_beverage'
+    save_data_path = '/home/agilex/twilight/data/aloha_beverage/aloha_beverage'
 
     collect_data_main(task_name = task_name, save_data_path = save_data_path, total_episodes = 50)
