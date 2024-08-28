@@ -123,8 +123,8 @@ def eval_bc(cfg, ckpt_path, save_episode=True):
         from utils.inference.isaac_fiveboxred import IsaacFiveBoxRedTestEnviManager
         envi_manager = IsaacFiveBoxRedTestEnviManager(cfg, policy, stats)
     elif cfg['TASK_NAME'] in ['aloha_singleobjgrasp', 'aloha_beverage']:
-        from utils.inference.aloha_singleobjgrasp import AlohaSingleObjGraspTestEnviManager
-        envi_manager = AlohaSingleObjGraspTestEnviManager(cfg, policy, stats)
+        from act.utils.inference.aloha_manipulation import AlohaManipulationTestEnviManager
+        envi_manager = AlohaManipulationTestEnviManager(cfg, policy, stats)
     else:
         raise NotImplementedError
 

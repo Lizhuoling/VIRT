@@ -1,5 +1,5 @@
-exp_id=aloha_singleobjgrasp2
-config_name=aloha_singleobjgrasp
+exp_id=aloha_beverage
+config_name=aloha_beverage
 
 nnodes=1
 nproc_per_node=1

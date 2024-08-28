@@ -16,7 +16,7 @@ from cv_bridge import CvBridge
 
 from act.utils.inference.aloha_ros import RosOperator, ros_default_args
 
-class AlohaSingleObjGraspTestEnviManager():
+class AlohaManipulationTestEnviManager():
     def __init__(self, cfg, policy, stats):
         self.cfg = cfg
         self.policy = policy
@@ -48,6 +48,8 @@ class AlohaSingleObjGraspTestEnviManager():
             cur_status = torch.zeros((1,), dtype = torch.long).cuda()
             if self.cfg['TASK_NAME'] == 'aloha_singleobjgrasp':
                 task_instruction = 'Put the snack into the bin.'
+            elif self.cfg['TASK_NAME'] == 'aloha_beverage':
+                task_instruction = 'Please make a cup of beverage by mixing the provided blueberry and mango juice using the juicer.'
             else:
                 raise NotImplementedError
             effort_obs_list = []
