@@ -101,7 +101,7 @@ def load_data(cfg):
     elif cfg['TASK_NAME'] == 'droid_pretrain':
         train_transforms = build_DroidPretrainTransforms(cfg, is_train = True)
         train_dataset = DroidPretrainDataset(cfg, transforms = train_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = train_indices, is_train = True)
-    elif cfg['TASK_NAME'] in ['aloha_singleobjgrasp',]:
+    elif cfg['TASK_NAME'] in ['aloha_singleobjgrasp', 'aloha_beverage']:
         train_transforms = build_AlohaGripperTransforms(cfg, is_train = True)
         train_dataset = AlohaGripperDataset(cfg, transforms = train_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = train_indices, is_train = True)
 

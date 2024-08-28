@@ -14,7 +14,7 @@ def get_detector(cfg,):
         return SingleColorFilter(cfg)
     elif cfg["POLICY"]["EXTERNAL_DET"] == "LanguageMultiColorFilter":
         return LanguageMultiColorFilter(cfg)
-    elif cfg["POLICY"]["EXTERNAL_DET"] == "YOLOv10_airphonebox":
+    elif cfg["POLICY"]["EXTERNAL_DET"] in ["YOLOv10_airphonebox", "YOLOv10_beverage"]:
         return AlohaYOLOv10(cfg)
     
 class AlohaYOLOv10():
@@ -36,8 +36,48 @@ class AlohaYOLOv10():
         denorm_img = denorm_img.view(bs * num_cam, ch, img_h, img_w) # Left shape: (bs * num_cam, 3, img_h, img_w)
         resize_denorm_img = self.tensor_resize(denorm_img)
         det_results = self.yolo.predict(source=torch.clip(resize_denorm_img, min = 0, max = 1), imgsz=640, conf=self.yolo_conf, verbose = False) # det_results is a list with the length of  bs * num_cam.
-        det_boxes = [ele.boxes.xyxy[:1] for ele in det_results] # Only 1 oncerned object for each image.
-        det_boxes = [ele if ele.shape[0] > 0 else ele.new_zeros((1, 4), dtype = torch.float32) for ele in det_boxes]
+
+        name_to_id_dict = {value:key for key, value in det_results[0].names.items()}
+        if self.cfg["POLICY"]["EXTERNAL_DET"] == "YOLOv10_airphonebox":
+            det_boxes = [ele.boxes.xyxy[:1] for ele in det_results] # Only 1 concerned object for each image (the top confidence).
+            det_boxes = [ele if ele.shape[0] > 0 else ele.new_zeros((1, 4), dtype = torch.float32) for ele in det_boxes]
+        else:
+            det_cls_id_list = []
+            for status_ele in status.detach().cpu().numpy():
+                # 'mango_beverage', 'blue_plate', 'cup', 'juicer_cup'
+                if status_ele == 0:
+                    det_cls_name = 'juicer_cup'
+                elif status_ele == 1:
+                    det_cls_name = 'blue_plate'
+                elif status_ele == 2:
+                    det_cls_name = 'mango_beverage'
+                elif status_ele == 3:
+                    det_cls_name = 'juicer_cup'
+                elif status_ele == 4:
+                    det_cls_name = 'juicer_cup'
+                elif status_ele == 5:
+                    det_cls_name = 'cup'
+                elif status_ele == 6:
+                    det_cls_name = 'juicer_cup'
+                elif status_ele == 7:
+                    det_cls_name = 'cup'
+                else:
+                    raise NotImplementedError
+                det_cls_id = name_to_id_dict[det_cls_name]
+                det_cls_id_list.append(det_cls_id)
+            det_cls_ids = np.repeat(np.array(det_cls_id_list)[:, None], num_cam, axis = 1).reshape(bs * num_cam)   # Left shape: (bs * num_cam,)
+            det_box_cls = [ele.boxes.cls for ele in det_results]
+            det_box_xyxy = [ele.boxes.xyxy for ele in det_results]
+            det_boxes = []
+            for cnt, cls_id in enumerate(det_cls_ids):
+                class_match_flag = (det_box_cls[cnt] == cls_id)
+                cls_match_box = det_box_xyxy[cnt][class_match_flag]
+                if cls_match_box.shape[0] > 1:
+                    cls_match_box = cls_match_box[:1]
+                elif cls_match_box.shape[0] == 0:
+                    cls_match_box = cls_match_box.new_zeros((1, 4), dtype = torch.float32)
+                det_boxes.append(cls_match_box)
+                
         det_boxes = torch.cat(det_boxes, dim = 0)   # Left shape: (bs * num_cam, 4)
         det_boxes[..., [0, 2]] = det_boxes[..., [0, 2]] / 640 * img_w
         det_boxes[..., [1, 3]] = det_boxes[..., [1, 3]] / 640 * img_h

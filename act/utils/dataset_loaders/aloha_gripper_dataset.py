@@ -109,7 +109,9 @@ class AlohaGripperDataset(torch.utils.data.Dataset):
             action_is_pad[action_len:] = 1
             
             if self.cfg['TASK_NAME'] == 'aloha_singleobjgrasp':
-                task_instruction = np.array(root['/task_instruction']).item().decode('utf-8')
+                task_instruction = 'Put the snack into the bin.'
+            elif self.cfg['TASK_NAME'] == 'aloha_beverage':
+                task_instruction = 'Please make a cup of beverage by mixing the provided blueberry and mango juice using the juicer.'
             else:
                 raise NotImplementedError
 
@@ -117,7 +119,7 @@ class AlohaGripperDataset(torch.utils.data.Dataset):
                 seg_keyframe = root['/seg_keyframe'][:] # Left shape: (key_num, 2). The first number is frame id and the second one is status id.
                 if hdf5_frame_id < seg_keyframe[0][0]: 
                     status = 0
-                elif hdf5_frame_id >= seg_keyframe[1][0] and hdf5_frame_id < seg_keyframe[-1][0]:
+                elif hdf5_frame_id >= seg_keyframe[0][0] and hdf5_frame_id < seg_keyframe[-1][0]:
                     for i in range(seg_keyframe.shape[0] - 1):
                         if hdf5_frame_id >= seg_keyframe[i][0] and hdf5_frame_id < seg_keyframe[i + 1][0]:
                             status = seg_keyframe[i][1]

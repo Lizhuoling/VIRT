@@ -349,7 +349,7 @@ def collect_data_main(task_name, save_data_path = "", total_episodes = 1):
     else:
         start_episode_num = 0
 
-    task_instruction = 'Put the snack into the bin.'
+    task_instruction = 'Please make a cup of beverage by mixing the provided blueberry and mango juice using the juicer.'
     record_data_flag = False
     episode_cnt = start_episode_num
     while episode_cnt < total_episodes:

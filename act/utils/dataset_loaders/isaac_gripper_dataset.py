@@ -112,7 +112,7 @@ class IsaacGripperDataset(torch.utils.data.Dataset):
                 seg_keyframe = root['/seg_keyframe'][:] # Left shape: (key_num, 2). The first number is frame id and the second one is status id.
                 if hdf5_frame_id < seg_keyframe[0][0]: 
                     status = 0
-                elif hdf5_frame_id >= seg_keyframe[1][0] and hdf5_frame_id < seg_keyframe[-1][0]:
+                elif hdf5_frame_id >= seg_keyframe[0][0] and hdf5_frame_id < seg_keyframe[-1][0]:
                     for i in range(seg_keyframe.shape[0] - 1):
                         if hdf5_frame_id >= seg_keyframe[i][0] and hdf5_frame_id < seg_keyframe[i + 1][0]:
                             status = seg_keyframe[i][1]
