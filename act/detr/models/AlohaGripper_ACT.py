@@ -71,15 +71,16 @@ class AlohaGripperDETR(nn.Module):
         if 'past_action' in self.cfg['DATA']['INPUT_KEYS']:
             self.past_action_mlp = nn.Linear(14, hidden_dim)  # Past action information encoding
             self.past_action_pos_emb = nn.Embedding(self.cfg['DATA']['PAST_ACTION_LEN'], hidden_dim)
-        if 'observations/effort' in self.cfg['DATA']['INPUT_KEYS'] or 'observations/qpos' in self.cfg['DATA']['INPUT_KEYS'] or 'observations/qvel' in self.cfg['DATA']['INPUT_KEYS']:
+        if 'observations/effort_obs' in self.cfg['DATA']['INPUT_KEYS'] or 'observations/qpos_obs' in self.cfg['DATA']['INPUT_KEYS'] or 'observations/qvel_obs' in self.cfg['DATA']['INPUT_KEYS']:
             self.obs_pos_emb = nn.Embedding(self.cfg['DATA']['PAST_OBSERVATION_LEN'], hidden_dim)
-            if 'observations/effort' in self.cfg['DATA']['INPUT_KEYS']:
+            if 'observations/effort_obs' in self.cfg['DATA']['INPUT_KEYS']:
                 self.effort_obs_mlp = nn.Linear(14, hidden_dim)
                 self.effort_obs_pos_emb = nn.Embedding(1, hidden_dim)
-            if 'observations/qpos' in self.cfg['DATA']['INPUT_KEYS']:
+            if 'observations/qpos_obs' in self.cfg['DATA']['INPUT_KEYS']:
                 self.qpos_obs_mlp = nn.Linear(14, hidden_dim)
                 self.qpos_obs_pos_emb = nn.Embedding(1, hidden_dim)
-            if 'observations/qvel' in self.cfg['DATA']['INPUT_KEYS']:
+                self.cur_qpos_obs_mlp = nn.Linear(14, hidden_dim)
+            if 'observations/qvel_obs' in self.cfg['DATA']['INPUT_KEYS']:
                 self.qvel_obs_mlp = nn.Linear(14, hidden_dim)
                 self.qvel_obs_pos_emb = nn.Embedding(1, hidden_dim)
 
@@ -157,24 +158,30 @@ class AlohaGripperDETR(nn.Module):
             src = torch.cat((src, past_action_src), dim = 0)  # Left shape: (L, B, C)
             pos = torch.cat((pos, past_action_pos), dim = 0)  # Left shape: (L, B, C)
             mask = torch.cat((mask, past_action_is_pad), dim = 1) # Left shape: (B, L)
-        if 'observations/effort' in self.cfg['DATA']['INPUT_KEYS']:
+        if 'observations/effort_obs' in self.cfg['DATA']['INPUT_KEYS']:
             effort_obs_src = self.effort_obs_mlp(effort_obs).permute(1, 0, 2)    # (past_obs_len, B, C)
             effort_obs_pos = self.obs_pos_emb.weight[:, None, :].expand(-1, bs, -1) + self.effort_obs_pos_emb.weight[:, None, :]  # (past_obs_len, B, C)
             src = torch.cat((src, effort_obs_src), dim = 0)  # Left shape: (L, B, C)
             pos = torch.cat((pos, effort_obs_pos), dim = 0)  # Left shape: (L, B, C)
             mask = torch.cat((mask, observation_is_pad), dim = 1) # Left shape: (B, L)
-        if 'observations/qpos' in self.cfg['DATA']['INPUT_KEYS']:
+        if 'observations/qpos_obs' in self.cfg['DATA']['INPUT_KEYS']:
             qpos_obs_src = self.qpos_obs_mlp(qpos_obs).permute(1, 0, 2)    # (past_obs_len, B, C)
             qpos_obs_pos = self.obs_pos_emb.weight[:, None, :].expand(-1, bs, -1) + self.qpos_obs_pos_emb.weight[:, None, :]  # (past_obs_len, B, C)
             src = torch.cat((src, qpos_obs_src), dim = 0)  # Left shape: (L, B, C)
             pos = torch.cat((pos, qpos_obs_pos), dim = 0)  # Left shape: (L, B, C)
             mask = torch.cat((mask, observation_is_pad), dim = 1) # Left shape: (B, L)
-        if 'observations/qvel' in self.cfg['DATA']['INPUT_KEYS']:
+        if 'observations/qvel_obs' in self.cfg['DATA']['INPUT_KEYS']:
             qvel_obs_src = self.qvel_obs_mlp(qvel_obs).permute(1, 0, 2)    # (past_obs_len, B, C)
             qvel_obs_pos = self.obs_pos_emb.weight[:, None, :].expand(-1, bs, -1) + self.qvel_obs_pos_emb.weight[:, None, :]  # (past_obs_len, B, C)
             src = torch.cat((src, qvel_obs_src), dim = 0)  # Left shape: (L, B, C)
             pos = torch.cat((pos, qvel_obs_pos), dim = 0)  # Left shape: (L, B, C)
             mask = torch.cat((mask, observation_is_pad), dim = 1) # Left shape: (B, L)
+
+        # Add the current qpos observation token to all tokens.
+        if 'observations/qpos_obs' in self.cfg['DATA']['INPUT_KEYS']:
+            cur_qpos_obs = qpos_obs[:, :1, :]  # Left shape: (B, 1, joint_dim)
+            cur_qpos_emb = self.cur_qpos_obs_mlp(cur_qpos_obs).permute(1, 0, 2) # Left shape: (1, B, C)
+            src = src + cur_qpos_emb
     
         query_emb = self.query_embed.weight.unsqueeze(1).repeat(1, bs, 1)   # Left shape: (num_query, B, C)
         hs = self.transformer(src, mask, query_emb, pos) # Left shape: (num_dec, B, num_query, C)

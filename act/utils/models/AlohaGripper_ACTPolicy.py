@@ -45,6 +45,12 @@ class AlohaGripper_ACTPolicy(nn.Module):
                     loss_dict[f'status_pred_{dec_cnt}'] = status_pred_loss.item()
                     total_loss = total_loss + status_pred_loss
 
+            if self.cfg['TRAIN']['LOSS_SMOOTH_REGULARIZATION'] > 0:
+                a_hat_velo = a_hat[:, :, 1:, :] - a_hat[:, :, :-1, :]   # Left shape: (num_dec, B, num_query - 1, num_action)
+                velocity_smoothness = self.cfg['TRAIN']['LOSS_SMOOTH_REGULARIZATION'] * ((a_hat_velo[:, :, 1:, :] - a_hat_velo[:, :, :-1, :]) ** 2).sum(dim = (0, 3)).mean()
+                loss_dict[f'smooth_loss'] = velocity_smoothness.item()
+                total_loss = total_loss + velocity_smoothness
+
             if self.cfg['POLICY']['USE_UNCERTAINTY']:
                 l1_without_uncern = (mask_l1.sum(-1) / valid_count).mean(dim = -1)  # Left shape: (num_dec,)
                 total_l1_without_uncern = l1_without_uncern.sum()

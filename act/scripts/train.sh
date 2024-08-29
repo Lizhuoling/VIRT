@@ -1,13 +1,13 @@
-exp_id=aloha_beverage
-config_name=aloha_beverage
+exp_id=debug
+config_name=aloha_beverage_smooth
 
 nnodes=1
 nproc_per_node=1
 node_rank=0
 master_addr=127.0.0.1
-master_port=29515
+master_port=29514
 
-CUDA_VISIBLE_DEVICES=1 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_node --node_rank=$node_rank --master_addr=$master_addr --master_port $master_port \
+CUDA_VISIBLE_DEVICES=0 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_node --node_rank=$node_rank --master_addr=$master_addr --master_port $master_port \
     imitate_episodes.py \
     --config_name $config_name \
     --save_dir ./outputs/$exp_id \
