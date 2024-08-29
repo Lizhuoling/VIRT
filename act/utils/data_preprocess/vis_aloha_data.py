@@ -4,6 +4,7 @@ import pdb
 import os
 import cv2
 import tqdm
+import matplotlib.pyplot as plt
 
 def vis_aloha_sim_h5py(h5py_file, save_folder):
     h5py_content = h5py.File(h5py_file, 'r')
@@ -44,7 +45,29 @@ def vis_self_data(h5py_file, save_folder, start_frame, end_frame):
     top_out.release()
     print('Done')
 
+def vis_aloha_action(h5py_path, start_idx, sample_gap, vis_len):
+    h5py_file = h5py.File(h5py_path)
+    action = h5py_file['action'][:]
+    h5py_file.close()
+    left_action = action[:, :7]
+    sample_left_action = left_action[start_idx: start_idx + vis_len : sample_gap]
+
+    plt.figure(figsize=(10, 8))
+    for i in range(sample_left_action.shape[1]):
+        plt.subplot(sample_left_action.shape[1], 1, i + 1)
+        plt.scatter(range(sample_left_action.shape[0]), sample_left_action[:, i], label=f'Dimension {i+1}')
+        plt.legend(loc='upper right')
+        plt.title(f'Joint {i+1}')
+
+    plt.tight_layout()
+    plt.savefig('vis.png')
+
+
 if __name__ == '__main__':
-    vis_aloha_sim_h5py(h5py_file = '/home/twilight/home/data/aloha/sim_insertion_scripted/episode_0.hdf5', save_folder = '/home/twilight/home/data/aloha/vis')
+    #vis_aloha_sim_h5py(h5py_file = '/home/twilight/home/data/aloha/sim_insertion_scripted/episode_0.hdf5', save_folder = '/home/twilight/home/data/aloha/vis')
     #h5py_file = '/home/twilight/home/data/own_data/episode_0.hdf5'
     #vis_self_data(h5py_file = h5py_file, save_folder = '/home/twilight/home/data/own_data/vis/episode_0', start_frame = 10, end_frame = 400)
+    vis_aloha_action(h5py_path = '/home/agilex/twilight/data/aloha_beverage/aloha_beverage/h5py/episode_32.hdf5', 
+                     start_idx = 1000,
+                     sample_gap = 1,
+                     vis_len = 100)

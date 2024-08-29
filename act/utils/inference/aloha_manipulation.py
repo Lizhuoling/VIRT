@@ -3,6 +3,7 @@ import math
 import numpy as np
 import time
 from collections import deque
+import matplotlib.pyplot as plt
 import cv2
 import torch
 from torchvision.transforms import functional as F
@@ -24,7 +25,7 @@ class AlohaManipulationTestEnviManager():
         self.ros_args = ros_default_args()
         self.ros_operator = RosOperator(self.ros_args)
 
-        self.init_moving_max_gap = 0.1
+        self.init_moving_max_gap = 0.05
 
     def init_check(self,):
         # The robotic hands will nod to check whether they work properly.
@@ -141,6 +142,20 @@ class AlohaManipulationTestEnviManager():
                 right_action = action_to_execute[7:]
                 self.ros_operator.puppet_arm_publish(left_action, right_action)
                 action_step += 1
+
+                # Visualize the predicted action
+                '''if len(action_list) > 100:
+                    remove_first_action_list = action_list[1:]
+                    action_array = torch.cat(remove_first_action_list, dim = 0).cpu().numpy()[:, :7]
+                    plt.figure(figsize=(10, 8))
+                    for i in range(action_array.shape[1]):
+                        plt.subplot(action_array.shape[1], 1, i + 1)
+                        plt.scatter(range(action_array.shape[0]), action_array[:, i], label=f'Dimension {i+1}')
+                        plt.legend(loc='upper right')
+                        plt.title(f'Joint {i+1}')
+                    plt.tight_layout()
+                    plt.savefig('vis.png')
+                    pdb.set_trace()'''
 
                 freq_controller.sleep()
 
