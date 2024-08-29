@@ -418,4 +418,4 @@ if __name__ == '__main__':
     task_name = 'aloha_beverage'
     save_data_path = '/home/agilex/twilight/data/aloha_beverage/aloha_beverage'
 
-    collect_data_main(task_name = task_name, save_data_path = save_data_path, total_episodes = 50)
+    collect_data_main(task_name = task_name, save_data_path = save_data_path, total_episodes = 100)
