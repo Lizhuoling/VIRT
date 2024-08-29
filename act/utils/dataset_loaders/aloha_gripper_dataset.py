@@ -115,6 +115,7 @@ class AlohaGripperDataset(torch.utils.data.Dataset):
             else:
                 raise NotImplementedError
 
+            if self.cfg['TASK_NAME'] in ['aloha_beverage',]: assert 'seg_keyframe' in root.keys(), f"seg_keyframe is missing in {hdf5_file_name}"
             if self.cfg['POLICY']['STATUS_PREDICT'] and 'seg_keyframe' in root.keys():
                 seg_keyframe = root['/seg_keyframe'][:] # Left shape: (key_num, 2). The first number is frame id and the second one is status id.
                 if hdf5_frame_id < seg_keyframe[0][0]: 

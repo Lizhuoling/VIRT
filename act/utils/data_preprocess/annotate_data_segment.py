@@ -198,7 +198,7 @@ class DataSegmentAnnotationTool:
                     self.segment_labels = None
                 h5py_f = h5py.File(self.h5py_filepath, 'r+')
                 if 'seg_keyframe' in h5py_f.keys(): del h5py_f['seg_keyframe']
-                if self.segment_labels != None: h5py_f['seg_keyframe'] = self.segment_labels
+                if self.segment_labels is not None: h5py_f['seg_keyframe'] = self.segment_labels
                 h5py_f.close()
 
         else:
