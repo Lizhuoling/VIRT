@@ -61,10 +61,9 @@ class AlohaManipulationTestEnviManager():
                 task_instruction = 'Please make a cup of beverage by mixing the provided blueberry and mango juice using the juicer.'
             else:
                 raise NotImplementedError
-            effort_obs_list = []
+            effort_obs_list = []   
             qpos_obs_list = []
             qvel_obs_list = []
-            latest_qpos_unnorm = None
             action_list = []
             smooth_action_pred = None
             action_step, action_cnt = 0, 0 # action_step is the total actions number that have been executed, and action_cnt is the number in the local action sequence.
@@ -110,28 +109,34 @@ class AlohaManipulationTestEnviManager():
                             action_cnt = 0
                             cur_status = status_pred.clone()
                     else:
-                        smooth_action_pred = actions_pred.clone()
+                        smooth_action_pred = actions_pred[:, :self.cfg['EVAL']['VALID_CHUNK']].clone()
                         action_cnt = 0
                         cur_status = status_pred.clone()
 
                 # Get and save observation data
                 norm_effort, norm_qpos, norm_qvel, imgs, latest_qpos_unnorm = self.get_observation()
-                effort_obs_list.append(norm_effort)
-                qpos_obs_list.append(norm_qpos)
-                qvel_obs_list.append(norm_qvel)
                 
-                # Execute an action
+                # Prepare an action to execute
                 action_to_execute = smooth_action_pred[0, action_cnt].clone() # Left shape: (joint_dim,)
                 interp_flag = (smooth_action_pred[0, action_cnt] - latest_qpos_unnorm).abs() > self.init_moving_max_gap
                 interp_flag = interp_flag.cpu()
                 interp_flag[[6, 13]] = False    # The gripper closing does not need to be interpolated.
                 interp_flag = interp_flag.cuda()
+                next_predict_action = False
                 if interp_flag.sum() == 0:  # No interpolation is needed
                     action_cnt += 1
+                    next_predict_action = True
                 else:
                     action_to_execute = torch.where(interp_flag, latest_qpos_unnorm + (smooth_action_pred[0, action_cnt] - latest_qpos_unnorm).sign() * self.init_moving_max_gap, action_to_execute)
-                norm_action_to_execute = (action_to_execute - self.stats['action_mean'].cuda()) / self.stats['action_std'].cuda()   # Left shape: (joint_dim,)
-                action_list.append(norm_action_to_execute[None])
+
+                if next_predict_action:
+                    effort_obs_list.append(norm_effort)
+                    qpos_obs_list.append(norm_qpos)
+                    qvel_obs_list.append(norm_qvel)
+                    norm_action_to_execute = (action_to_execute - self.stats['action_mean'].cuda()) / self.stats['action_std'].cuda()   # Left shape: (joint_dim,)
+                    action_list.append(norm_action_to_execute[None])
+
+                # Execute an action
                 left_action = action_to_execute[:7]
                 right_action = action_to_execute[7:]
                 self.ros_operator.puppet_arm_publish(left_action, right_action)
