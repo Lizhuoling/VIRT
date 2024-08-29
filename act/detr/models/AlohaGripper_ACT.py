@@ -60,6 +60,7 @@ class AlohaGripperDETR(nn.Module):
             self.uncern_head = nn.Linear(hidden_dim, 1)
         if self.cfg['POLICY']['STATUS_PREDICT']:
             self.status_head = nn.Linear(hidden_dim, self.cfg['POLICY']['STATUS_NUM'])
+            self.status_emb = nn.Embedding(self.cfg['POLICY']['STATUS_NUM'], hidden_dim)
 
         # Camera image feature extraction.
         if self.cfg['POLICY']['BACKBONE'] == 'dinov2_s':
@@ -182,6 +183,10 @@ class AlohaGripperDETR(nn.Module):
             cur_qpos_obs = qpos_obs[:, :1, :]  # Left shape: (B, 1, joint_dim)
             cur_qpos_emb = self.cur_qpos_obs_mlp(cur_qpos_obs).permute(1, 0, 2) # Left shape: (1, B, C)
             src = src + cur_qpos_emb
+
+        if self.cfg['POLICY']['STATUS_PREDICT']:
+            status_pos_emb = self.status_emb.weight[status][None] # Left shape: (1, B, C)
+            src = src + status_pos_emb
     
         query_emb = self.query_embed.weight.unsqueeze(1).repeat(1, bs, 1)   # Left shape: (num_query, B, C)
         hs = self.transformer(src, mask, query_emb, pos) # Left shape: (num_dec, B, num_query, C)
