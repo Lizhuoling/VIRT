@@ -24,7 +24,7 @@ class AlohaManipulationTestEnviManager():
         self.ros_args = ros_default_args()
         self.ros_operator = RosOperator(self.ros_args)
 
-        self.init_moving_max_gap = 0.05
+        self.init_moving_max_gap = 0.1
 
     def init_check(self,):
         # The robotic hands will nod to check whether they work properly.
@@ -36,12 +36,21 @@ class AlohaManipulationTestEnviManager():
         self.ros_operator.puppet_arm_publish_continuous(left0, right0)
         input("Enter any key to continue :")
         self.ros_operator.puppet_arm_publish_continuous(left1, right1)
-    
+
+    def relative_init(self,):
+        left = [-0.184062,  0.70782757,  0.67425823, -0.32215595,  0.52929688, -0.25425339,  1.70061493]
+        right = [0.4262991 ,  0.57011509,  0.97142792, -0.88673973, -0.20962048,  0.20199108, -0.00686646]
+        input("Enter any key to move to the relative init position:")
+        self.ros_operator.puppet_arm_publish_continuous(left, right)
+
     def inference(self,):
         self.init_check()
 
         if self.cfg['EVAL']['CHUNK_SMOOTH'] > 0:
             action_deque = deque(maxlen = self.cfg['EVAL']['CHUNK_SMOOTH'])
+
+        if self.cfg['POLICY']['OUTPUT_MODE'] == 'relative':
+            self.relative_init()
         
         freq_controller = rospy.Rate(self.ros_args.publish_rate)
         with torch.inference_mode():
