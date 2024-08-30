@@ -17,7 +17,7 @@ class AlohaGripper_ACTPolicy(nn.Module):
         self.model = model.cuda()
 
         self.CrossEntropyLoss = nn.CrossEntropyLoss()
-        self.status_cls_loss_weight = 50
+        self.status_cls_loss_weight = 10
 
     def __call__(self, image, past_action, action, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction, status):
         env_state = None

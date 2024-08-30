@@ -51,19 +51,23 @@ class AlohaYOLOv10():
                 if status_ele == 0:
                     det_cls_name = 'juicer_cup'
                 elif status_ele == 1:
-                    det_cls_name = 'blue_plate'
+                    det_cls_name = 'juicer_cup'
                 elif status_ele == 2:
-                    det_cls_name = 'mango_beverage'
+                    det_cls_name = 'blue_plate'
                 elif status_ele == 3:
-                    det_cls_name = 'juicer_cup'
+                    det_cls_name = 'blue_plate'
                 elif status_ele == 4:
-                    det_cls_name = 'juicer_cup'
+                    det_cls_name = 'blue_plate'
                 elif status_ele == 5:
-                    det_cls_name = 'cup'
+                    det_cls_name = 'mango_beverage'
                 elif status_ele == 6:
-                    det_cls_name = 'juicer_cup'
+                    det_cls_name = 'mango_beverage'
                 elif status_ele == 7:
-                    det_cls_name = 'cup'
+                    det_cls_name = 'mango_beverage'
+                elif status_ele == 8:
+                    det_cls_name = 'mango_beverage'
+                elif status_ele == 9:
+                    det_cls_name = 'juicer_cup'
                 else:
                     raise NotImplementedError
                 det_cls_id = name_to_id_dict[det_cls_name]

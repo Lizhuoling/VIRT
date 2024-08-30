@@ -203,9 +203,9 @@ class AlohaGripperDETR(nn.Module):
         a_hat = self.action_head(hs)    # left shape: (num_dec, B, num_query, action_dim)
         
         if self.cfg['POLICY']['OUTPUT_MODE'] == 'relative': # Only the robotic arm joint is controlled with relative signal, the gripper is still controlled absolutely.
-            cur_status = past_action[:, -1, :][:, None, :] # left shape: (B, 1, action_dim)
-            if is_training: cur_status = cur_status[None]   # left shape: (1, B, 1, action_dim)
-            a_hat = a_hat + cur_status
+            cur_qpos = qpos_obs[:, -1, :][:, None, :] # left shape: (B, 1, action_dim)
+            if is_training: cur_qpos = cur_qpos[None]   # left shape: (1, B, 1, action_dim)
+            a_hat = a_hat + cur_qpos
         elif self.cfg['POLICY']['OUTPUT_MODE'] == 'absolute':
             pass
         else:

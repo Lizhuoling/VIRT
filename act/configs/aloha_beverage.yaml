@@ -6,7 +6,7 @@ POLICY:
   POLICY_NAME: "AlohaGripper_ACT"
   BACKBONE: "dinov2_s"
   BACKBONE_PATH: "./pretrained/dinov2_vits14_pretrain.pth"
-  CHUNK_SIZE: 20
+  CHUNK_SIZE: 40
   STATE_DIM: 14
   ENC_LAYERS: 0
   DEC_LAYERS: 3
@@ -18,7 +18,7 @@ POLICY:
   EXTERNAL_DET: "YOLOv10_beverage"
   EXTERNAL_DET_SCALE_FACTOR: 1.3
   YOLO_PATH: "./pretrained/yolov10_aloha_beverage.pt"
-  STATUS_NUM: 8
+  STATUS_NUM: 10
   STATUS_PREDICT: True
   GRID_MASK: True
 
@@ -46,5 +46,5 @@ DATA:
   NORM_KEYS: ['action', 'observations/effort_obs', 'observations/qpos_obs', 'observations/qvel_obs']
   PAST_OBSERVATION_LEN: 20
   OBSERVATION_SAMPLE_INTERVAL: 10
-  PAST_ACTION_LEN: 10
+  PAST_ACTION_LEN: 5
   PAST_ACTION_SAMPLE_INTERVAL: 1

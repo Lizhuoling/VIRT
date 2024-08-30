@@ -64,12 +64,27 @@ class DataSegmentAnnotationTool:
         self.clean_button.config(font=("Helvetica", 16), height=2, width=12)
         self.clean_button.pack(pady=10)
 
+        self.clean_all_button = tk.Button(self.control_panel, text="Clean All", command=self.clean_all)
+        self.clean_all_button.pack(side="left")
+        self.clean_all_button.config(font=("Helvetica", 16), height=2, width=12)
+        self.clean_all_button.pack(pady=10)
+
+        self.video_open_button = tk.Button(self.control_panel, text="Open Video", command=self.quick_load)
+        self.video_open_button.pack(side="left")
+        self.video_open_button.config(font=("Helvetica", 16), height=2, width=12)
+
+        video_id = tk.Label(root, text="Video ID", font = ("Helvetica", 16))
+        video_id.pack(padx=10, pady=5)
+        self.video_label_entry = tk.Entry(root, font = ("Helvetica", 16))
+        self.video_label_entry.pack(padx=10, pady=5)
+        self.video_label_entry.insert(0, "3")
+
         self.frame_slider = tk.Scale(self.control_panel, orient="horizontal", command=self.slide_frame, length=600,)
         self.frame_slider.pack(fill="x")
 
         seg_label = tk.Label(root, text="Segment ID", font = ("Helvetica", 16))
         seg_label.pack(padx=10, pady=5)
-        self.seg_label_entry = tk.Entry(root)
+        self.seg_label_entry = tk.Entry(root, font = ("Helvetica", 16))
         self.seg_label_entry.pack(padx=10, pady=5)
         self.seg_label_entry.insert(0, "-1")
 
@@ -81,6 +96,31 @@ class DataSegmentAnnotationTool:
     def load(self):
         self.segment_labels = None
         self.h5py_filepath = filedialog.askopenfilename(initialdir = self.h5py_path)
+        if self.h5py_filepath:
+            cam_selection = self.cam_selection_var.get()
+            if cam_selection == '': cam_selection = 'cam_left_wrist'
+
+            h5py_filename = self.h5py_filepath.rsplit('/')[-1]
+            video_filename = h5py_filename.replace('.hdf5', '.mp4')
+            video_path = os.path.join(self.data_root, cam_selection, video_filename)
+
+            self.cap = cv2.VideoCapture(video_path)
+            self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            self.frame_slider.config(to=self.total_frames - 1)
+
+            h5py_f = h5py.File(self.h5py_filepath, 'r')
+            if 'seg_keyframe' in h5py_f.keys():
+                self.segment_labels = h5py_f['seg_keyframe'][:]
+            else:
+                self.segment_labels = None
+            h5py_f.close()
+
+            self.show_frame(self.current_frame)
+
+    def quick_load(self):
+        self.segment_labels = None
+        video_label = int(self.video_label_entry.get())
+        self.h5py_filepath = os.path.join(self.h5py_path, f'episode_{video_label}.hdf5')
         if self.h5py_filepath:
             cam_selection = self.cam_selection_var.get()
             if cam_selection == '': cam_selection = 'cam_left_wrist'
@@ -207,10 +247,16 @@ class DataSegmentAnnotationTool:
         
         self.show_frame(self.current_frame)
 
+    def clean_all(self,):
+        h5py_f = h5py.File(self.h5py_filepath, 'r+')
+        if 'seg_keyframe' in h5py_f.keys(): del h5py_f['seg_keyframe']
+        h5py_f.close()
+        self.segment_labels = None
+        
+        self.show_frame(self.current_frame)
 
 if __name__ == '__main__':
-    root_path = '/home/cvte/twilight/data/aloha_beverage'
+    root_path = '/home/cvte/twilight/home/data/aloha_beverage/aloha_beverage'
     root = tk.Tk()
     app = DataSegmentAnnotationTool(root, root_path)
     root.mainloop()
-    
