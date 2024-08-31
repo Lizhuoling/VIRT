@@ -11,6 +11,7 @@ from torchvision import transforms
 import IPython
 e = IPython.embed
 import math
+import matplotlib.pyplot as plt
 
 from utils import comm
 from utils import samplers
@@ -105,11 +106,22 @@ class AlohaGripperDataset(torch.utils.data.Dataset):
                 action_len = self.cfg['POLICY']['CHUNK_SIZE']
             else:
                 action = root['/action'][start_ts + 1 :: action_sample_interval]
-                action_len = math.ceil((episode_len - start_ts - 1 + 1) / action_sample_interval)
+                action_len = math.ceil((episode_len - start_ts - 1) / action_sample_interval)
             padded_action = np.zeros((self.cfg['POLICY']['CHUNK_SIZE'], action.shape[1]), dtype=np.float32)
             padded_action[:action_len] = action
             action_is_pad = np.zeros(self.cfg['POLICY']['CHUNK_SIZE'])
             action_is_pad[action_len:] = 1
+
+            '''action_array = padded_action[:, :7]
+            plt.figure(figsize=(10, 8))
+            for i in range(action_array.shape[1]):
+                plt.subplot(action_array.shape[1], 1, i + 1)
+                plt.scatter(range(action_array.shape[0]), action_array[:, i], label=f'Dimension {i+1}')
+                plt.legend(loc='upper right')
+                plt.title(f'Joint {i+1}')
+            plt.tight_layout()
+            plt.savefig('vis.png')
+            pdb.set_trace()'''
             
             if self.cfg['TASK_NAME'] == 'aloha_singleobjgrasp':
                 task_instruction = 'Put the snack into the bin.'
