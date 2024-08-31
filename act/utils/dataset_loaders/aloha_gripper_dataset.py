@@ -10,6 +10,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from torchvision import transforms
 import IPython
 e = IPython.embed
+import math
 
 from utils import comm
 from utils import samplers
@@ -97,12 +98,14 @@ class AlohaGripperDataset(torch.utils.data.Dataset):
             past_action_is_pad = np.zeros(self.cfg['DATA']['PAST_ACTION_LEN'])
             past_action_is_pad[:-past_action_len] = 1   # Invalid past action
             
-            if root['/action'].shape[0] >= start_ts + self.cfg['POLICY']['CHUNK_SIZE'] + 1:
-                action = root['/action'][start_ts + 1 : start_ts + self.cfg['POLICY']['CHUNK_SIZE'] + 1]
+            chunk_size = self.cfg['POLICY']['CHUNK_SIZE']
+            action_sample_interval = self.cfg['DATA']['ACTION_SAMPLE_INTERVAL']
+            if root['/action'].shape[0] >= start_ts + chunk_size * action_sample_interval + 1:
+                action = root['/action'][start_ts + 1 : start_ts + chunk_size * action_sample_interval + 1 : action_sample_interval]
                 action_len = self.cfg['POLICY']['CHUNK_SIZE']
             else:
-                action = root['/action'][start_ts + 1:]
-                action_len = episode_len - start_ts - 1
+                action = root['/action'][start_ts + 1 :: action_sample_interval]
+                action_len = math.ceil((episode_len - start_ts - 1 + 1) / action_sample_interval)
             padded_action = np.zeros((self.cfg['POLICY']['CHUNK_SIZE'], action.shape[1]), dtype=np.float32)
             padded_action[:action_len] = action
             action_is_pad = np.zeros(self.cfg['POLICY']['CHUNK_SIZE'])

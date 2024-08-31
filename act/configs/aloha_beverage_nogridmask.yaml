@@ -6,7 +6,7 @@ POLICY:
   POLICY_NAME: "AlohaGripper_ACT"
   BACKBONE: "dinov2_s"
   BACKBONE_PATH: "./pretrained/dinov2_vits14_pretrain.pth"
-  CHUNK_SIZE: 40
+  CHUNK_SIZE: 20
   STATE_DIM: 14
   ENC_LAYERS: 0
   DEC_LAYERS: 3
@@ -20,7 +20,7 @@ POLICY:
   YOLO_PATH: "./pretrained/yolov10_aloha_beverage.pt"
   STATUS_NUM: 10
   STATUS_PREDICT: True
-  GRID_MASK: True
+  GRID_MASK: False
 
 TRAIN:
   NUM_ITERATIONS: 15000
