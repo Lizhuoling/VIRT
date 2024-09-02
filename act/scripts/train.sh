@@ -1,5 +1,5 @@
-exp_id=aloha_beverage
-config_name=aloha_beverage
+exp_id=aloha_pourblueplate
+config_name=aloha_pourblueplate
 
 nnodes=1
 nproc_per_node=1
@@ -11,7 +11,7 @@ CUDA_VISIBLE_DEVICES=1 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_nod
     imitate_episodes.py \
     --config_name $config_name \
     --save_dir ./outputs/$exp_id \
-    --data_dir datasets/aloha_beverage \
+    --data_dir datasets/aloha_pourblueplate \
     --num_nodes $nnodes \
     --load_pretrain outputs/pretrained_weight/droid_pretrain_dec_114k.ckpt \
     #--debug \

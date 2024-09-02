@@ -122,13 +122,6 @@ class AlohaGripperDataset(torch.utils.data.Dataset):
             plt.tight_layout()
             plt.savefig('vis.png')
             pdb.set_trace()'''
-            
-            if self.cfg['TASK_NAME'] == 'aloha_singleobjgrasp':
-                task_instruction = 'Put the snack into the bin.'
-            elif self.cfg['TASK_NAME'] == 'aloha_beverage':
-                task_instruction = 'Please make a cup of beverage by mixing the provided blueberry and mango juice using the juicer.'
-            else:
-                raise NotImplementedError
 
             if self.cfg['TASK_NAME'] in ['aloha_beverage',]: assert 'seg_keyframe' in root.keys(), f"seg_keyframe is missing in {hdf5_file_name}"
             if self.cfg['POLICY']['STATUS_PREDICT'] and 'seg_keyframe' in root.keys():
@@ -173,7 +166,7 @@ class AlohaGripperDataset(torch.utils.data.Dataset):
 
         image_data = self.transforms(image_data)
         
-        return image_data, past_action.float(), action_data.float(), effort_obs.float(), qpos_obs.float(), qvel_obs.float(), observation_is_pad, past_action_is_pad, action_is_pad, task_instruction, status
+        return image_data, past_action.float(), action_data.float(), effort_obs.float(), qpos_obs.float(), qvel_obs.float(), observation_is_pad, past_action_is_pad, action_is_pad, status
     
 class GripperImgNormalize():
     def __init__(self, mean, std, to_bgr=False):

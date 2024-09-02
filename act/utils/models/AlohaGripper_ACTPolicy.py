@@ -19,11 +19,11 @@ class AlohaGripper_ACTPolicy(nn.Module):
         self.CrossEntropyLoss = nn.CrossEntropyLoss()
         self.status_cls_loss_weight = 10
 
-    def __call__(self, image, past_action, action, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction, status):
+    def __call__(self, image, past_action, action, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, action_is_pad, status):
         env_state = None
         if action is not None: # training or validation time
             a_hat, a_hat_uncern, status_pred = self.model(image = image, past_action = past_action, action = action, effort_obs = effort_obs, qpos_obs = qpos_obs, qvel_obs = qvel_obs, \
-                    observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction = task_instruction, status = status)
+                    observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, status = status)
             loss_dict = dict()
             all_l1 = F.l1_loss(action.unsqueeze(0).expand(a_hat.shape[0], -1, -1, -1), a_hat, reduction='none') # Left shape: (num_dec, B, num_query, num_action)
             expand_action_is_pad = action_is_pad[None, :, :, None].expand(all_l1.shape[0], -1, -1, all_l1.shape[3])    # action_is_pad shape: (B, num_query), expand_action_is_pad shape: (num_dec, B, num_query, num_action)
@@ -64,5 +64,5 @@ class AlohaGripper_ACTPolicy(nn.Module):
             return total_loss, loss_dict
         else: # inference time
             a_hat, _, status_pred = self.model(image = image, past_action = past_action, action = None, effort_obs = effort_obs, qpos_obs = qpos_obs, qvel_obs = qvel_obs, \
-                            observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = None, task_instruction = task_instruction, status = status)
+                            observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = None, status = status)
             return a_hat, status_pred

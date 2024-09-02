@@ -32,7 +32,7 @@ class AlohaYOLOv10():
         self.norm_std = torch.Tensor(norm_std)[None, None, :, None, None].cuda()
         self.tensor_resize = torchvision.transforms.Resize((640, 640))
 
-    def __call__(self, img, task_instruction, status = None):
+    def __call__(self, img, status = None):
         bs, num_cam, ch, img_h, img_w = img.shape
 
         denorm_img = img * self.norm_std + self.norm_mean # Left shape: (bs, num_cam, 3, img_h, img_w). Range: 0~1

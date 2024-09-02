@@ -130,12 +130,6 @@ class AlohaManipulationTestEnviManager():
             cur_status = torch.zeros((1,), dtype = torch.long).cuda()
             #cur_status[0] = 1
 
-            if self.cfg['TASK_NAME'] == 'aloha_singleobjgrasp':
-                task_instruction = 'Put the snack into the bin.'
-            elif self.cfg['TASK_NAME'] == 'aloha_beverage':
-                task_instruction = 'Please make a cup of beverage by mixing the provided blueberry and mango juice using the juicer.'
-            else:
-                raise NotImplementedError
             effort_obs_list = []   
             qpos_obs_list = []
             qvel_obs_list = []
@@ -153,10 +147,10 @@ class AlohaManipulationTestEnviManager():
                         qvel_obs_list.append(norm_qvel)
                         action_list.append(norm_qpos) # Initialize the first element with qpos observation
 
-                    image, past_action, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, task_instruction, status = self.prepare_policy_input(effort_obs_list, qpos_obs_list, \
-                                    qvel_obs_list, action_list, imgs, task_instruction, cur_status)
+                    image, past_action, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, status = self.prepare_policy_input(effort_obs_list, qpos_obs_list, \
+                                    qvel_obs_list, action_list, imgs, cur_status)
                     norm_actions_pred, status_pred = self.policy(image = image, past_action = past_action.float(), action = None, effort_obs = effort_obs.float(), qpos_obs = qpos_obs.float(), qvel_obs = qvel_obs.float(), \
-                                    observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = None, task_instruction = task_instruction, status = status)  # Left shape: (1, T, 9)
+                                    observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = None, status = status)  # Left shape: (1, T, 9)
                     action_mean, action_std = self.stats['action_mean'][None, None].to(image.device), self.stats['action_std'][None, None].to(image.device) # Left shape: (1, 1, action_dim), (1, 1, action_dim)
                     actions_pred = norm_actions_pred * action_std + action_mean
 
@@ -268,7 +262,7 @@ class AlohaManipulationTestEnviManager():
 
             return norm_effort, norm_qpos, norm_qvel, imgs, qpos
         
-    def prepare_policy_input(self, effort_obs_list, qpos_obs_list, qvel_obs_list, action_list, imgs, task_instruction, cur_status):
+    def prepare_policy_input(self, effort_obs_list, qpos_obs_list, qvel_obs_list, action_list, imgs, cur_status):
         effort_obs = torch.stack(effort_obs_list, dim = 1) # Left shape: (1, T, 14)
         qpos_obs = torch.stack(qpos_obs_list, dim = 1) # Left shape: (1, T, 14)
         qvel_obs = torch.stack(qvel_obs_list, dim = 1) # Left shape: (1, T, 14)
@@ -308,7 +302,7 @@ class AlohaManipulationTestEnviManager():
             pad_past_action = torch.zeros((past_action.shape[0], past_action_len - past_action.shape[1], past_action.shape[2]), dtype = torch.float32).to(past_action.device)
             past_action = torch.cat((pad_past_action, past_action), dim = 1)
         
-        return imgs, past_action, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, task_instruction, cur_status
+        return imgs, past_action, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, cur_status
     
     def interpolate_action(self, actions_pred, cur_qpos_obs):
         '''

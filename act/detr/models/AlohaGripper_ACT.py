@@ -84,10 +84,6 @@ class AlohaGripperDETR(nn.Module):
             if 'observations/qvel_obs' in self.cfg['DATA']['INPUT_KEYS']:
                 self.qvel_obs_mlp = nn.Linear(14, hidden_dim)
                 self.qvel_obs_pos_emb = nn.Embedding(1, hidden_dim)
-
-        if self.cfg["POLICY"]["USE_CLIP"]:
-            self.clip_text_model = CLIPTextModelWithProjection.from_pretrained(cfg["POLICY"]["CLIP_PATH"])
-            self.clip_tokenizer = AutoTokenizer.from_pretrained(cfg["POLICY"]["CLIP_PATH"])
         
         if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
             self.object_detector = get_detector(cfg)
@@ -98,7 +94,7 @@ class AlohaGripperDETR(nn.Module):
         if self.cfg['POLICY']['GRID_MASK'] == True:
             self.grid_mask = GridMask(True, True, rotate=1, offset=False, ratio=0.5, mode=1, prob=0.7)
 
-    def forward(self, image, past_action, action, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction, status):
+    def forward(self, image, past_action, action, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, action_is_pad, status):
         """
         image: (batch, num_cam, channel, height, width)
         past_action: (batch, past_action_len, action_dim)
@@ -107,7 +103,6 @@ class AlohaGripperDETR(nn.Module):
         env_state: None
         action: (batch, chunk_size, action_dim)
         is_pad: (batch, chunk_size)
-        task_instruction_list: A list with the length of batch, each element is a string.
         """
         is_training = action is not None # train or val
         bs, num_cam, in_c, in_h, in_w = image.shape
@@ -115,7 +110,7 @@ class AlohaGripperDETR(nn.Module):
         if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
             assert self.cfg['POLICY']['BACKBONE'] == 'dinov2_s', "ROI image backbone only supports DINOv2 now!"
             with torch.no_grad():
-                roi_box, roi_img = self.object_detector(image, task_instruction, status)  # roi_box shape: (bs, num_cam, num_detbox, 4), roi_img shape: (bs, num_cam, num_detbox, 3, roi_h, roi_w)
+                roi_box, roi_img = self.object_detector(image, status)  # roi_box shape: (bs, num_cam, num_detbox, 4), roi_img shape: (bs, num_cam, num_detbox, 3, roi_h, roi_w)
             _, _, num_detbox, _, roi_h, roi_w = roi_img.shape
             assert num_detbox == 1
             roi_img = roi_img.view(bs * num_cam * num_detbox, 3, roi_h, roi_w)
@@ -144,13 +139,6 @@ class AlohaGripperDETR(nn.Module):
         else:
             raise NotImplementedError
         mask = torch.zeros((bs, src.shape[0]), dtype=torch.bool).to(image.device)   # Left shape: (B, NHW)
-        
-        if self.cfg["POLICY"]["USE_CLIP"]:
-            text_tokens = self.clip_tokenizer(task_instruction, padding=True, return_tensors="pt").to(image.device)
-            with torch.no_grad():
-                task_instruction_emb = self.clip_text_model(**text_tokens).text_embeds.detach()  # Left shape: (bs, clip_text_len)
-            task_instruction_src = task_instruction_emb[None]   # Left shape: (1, B, C)
-            src = src + task_instruction_src  # Left shape: (L, B, C)
 
         # proprioception features
         if 'past_action' in self.cfg['DATA']['INPUT_KEYS']:

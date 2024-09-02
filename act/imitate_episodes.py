@@ -168,12 +168,12 @@ def forward_pass(data, policy, cfg):
         return policy(image = image_data, goal_image = goal_image_data, past_action = past_action, action = action_data, end_obs = end_observation, joint_obs = end_observation,\
                     observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list)
     elif cfg['POLICY']['POLICY_NAME'] == 'AlohaGripper_ACT':
-        image_data, past_action, action_data, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction, status = data
+        image_data, past_action, action_data, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, action_is_pad, status = data
         image_data, past_action, action_data, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, action_is_pad, status = image_data.cuda(), past_action.cuda(), \
             action_data.cuda(), effort_obs.cuda(), qpos_obs.cuda(), qvel_obs.cuda(), observation_is_pad.cuda(), past_action_is_pad.cuda(), action_is_pad.cuda(), status.cuda()
         
         return policy(image = image_data, past_action = past_action, action = action_data, effort_obs = effort_obs, qpos_obs = qpos_obs, qvel_obs = qvel_obs, observation_is_pad = observation_is_pad, \
-                      past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction = task_instruction, status = status)
+                      past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, status = status)
 
 def train_bc(train_dataloader, val_dataloader, cfg, load_dir = '', load_pretrain = ''):
     logger = logging.getLogger("grasp")

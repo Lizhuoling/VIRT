@@ -294,7 +294,7 @@ class SaveDataManager():
     def set_episode_index(self, index):
         self.episode_index = index
 
-    def save_data(self, action_list, obs_list, images_list, depth_images_list, base_vel_list, task_instruction):
+    def save_data(self, action_list, obs_list, images_list, depth_images_list, base_vel_list):
         assert len(action_list) == len(obs_list) == len(images_list) != 0
         img_height, img_width, _ = images_list[0]['cam_high'].shape
         
@@ -304,7 +304,6 @@ class SaveDataManager():
         cam_right_wrist_writter = cv2.VideoWriter(os.path.join(self.cam_right_wrist_path, 'episode_{}.mp4'.format(self.episode_index)), fourcc, 20, (img_width, img_height))
 
         h5f = h5py.File(os.path.join(self.h5py_path, 'episode_{}.hdf5'.format(self.episode_index)), 'w')
-        h5f['task_instruction'] = task_instruction
         effort_obs = np.array([ele['effort'] for ele in obs_list])
         qpos_obs = np.array([ele['qpos'] for ele in obs_list])
         qvel_obs = np.array([ele['qvel'] for ele in obs_list])
@@ -349,7 +348,6 @@ def collect_data_main(task_name, save_data_path = "", total_episodes = 1):
     else:
         start_episode_num = 0
 
-    task_instruction = 'Please make a cup of beverage by mixing the provided blueberry and mango juice using the juicer.'
     record_data_flag = False
     episode_cnt = start_episode_num
     while episode_cnt < total_episodes:
@@ -405,7 +403,7 @@ def collect_data_main(task_name, save_data_path = "", total_episodes = 1):
                 break
             elif key == ord('s'):
                 print("Save data")
-                save_data_manager.save_data(action_list, obs_list, images_list, depth_images_list, base_vel_list, task_instruction)
+                save_data_manager.save_data(action_list, obs_list, images_list, depth_images_list, base_vel_list)
                 episode_cnt += 1
                 record_data_flag = False
                 break
@@ -415,7 +413,7 @@ def collect_data_main(task_name, save_data_path = "", total_episodes = 1):
 
 
 if __name__ == '__main__':
-    task_name = 'aloha_beverage'
+    task_name = 'aloha_openlid'
     save_data_path = '/home/agilex/twilight/data/aloha_beverage/aloha_beverage'
 
     collect_data_main(task_name = task_name, save_data_path = save_data_path, total_episodes = 100)
