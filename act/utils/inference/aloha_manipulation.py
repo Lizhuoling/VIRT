@@ -27,6 +27,7 @@ class AlohaManipulationTestEnviManager():
 
         self.init_moving_max_gap = 0.05
 
+    # The default init check (status 0)
     def init_check(self,):
         # The robotic hands will nod to check whether they work properly.
         left0 = [-0.00133514404296875, 0.00209808349609375, 0.01583099365234375, -0.032616615295410156, -0.00286102294921875, 0.00095367431640625, 3.557830810546875]
@@ -38,6 +39,76 @@ class AlohaManipulationTestEnviManager():
         input("Enter any key to continue :")
         self.ros_operator.puppet_arm_publish_continuous(left1, right1)
 
+    def init_putjuicercup(self,): # init status: 1
+        left0 = [-0.5419,  0.8223,  0.7368, -0.3157,  0.3134,  0.0784, 3.557830810546875]
+        right0 = [0.2493,  1.0683,  0.8921,  0.0864, -0.1684, -0.0063, 3.557830810546875]
+        left1 = [-0.5419,  0.8223,  0.7368, -0.3157,  0.3134,  0.0784, -0.3393220901489258]
+        right1 = [0.2493,  1.0683,  0.8921,  0.0864, -0.1684, -0.0063, -0.3397035598754883]
+
+        self.ros_operator.puppet_arm_publish_continuous(left0, right0)
+        input("Put the juicer in the gripper and press any key to continue:")
+        self.ros_operator.puppet_arm_publish_continuous(left1, right1)
+
+    def init_takeblueplate(self,):    # init status: 2
+        left0 = [-0.3584,  1.2007,  0.7963, -0.1967,  0.4023,  0.0154, 3.557830810546875]
+        right0 = [0.5194,  0.6704,  0.6083, -0.3531,  0.1524,  0.0986, 3.557830810546875]
+        left1 = [-0.3584,  1.2007,  0.7963, -0.1967,  0.4023,  0.0154, -0.3393220901489258]
+        right1 = [0.5194,  0.6704,  0.6083, -0.3531,  0.1524,  0.0986, -0.3397035598754883]
+
+        self.ros_operator.puppet_arm_publish_continuous(left0, right0)
+        input("Put the juicer in the gripper and press any key to continue:")
+        self.ros_operator.puppet_arm_publish_continuous(left1, right1)
+
+    def init_pourblueplate(self,):    # init status: 3
+        left0 = [-0.3859,  1.9305,  1.5967, -0.6224,  0.4427, -0.1909, 3.557830810546875]
+        right0 = [0.0032,  0.4240,  0.6224,  0.7712, -0.6491, -0.2096, 3.557830810546875]
+        left1 = [-0.3859,  1.9305,  1.5967, -0.6224,  0.4427, -0.1909, -0.3393220901489258]
+        right1 = [0.0032,  0.4240,  0.6224,  0.7712, -0.6491, -0.2096, -0.3397035598754883]
+
+        self.ros_operator.puppet_arm_publish_continuous(left0, right0)
+        input("Put the juicer in the gripper and press any key to continue:")
+        self.ros_operator.puppet_arm_publish_continuous(left1, right1)
+
+    def init_putblueplate(self,): # init status: 4
+        left0 = [-0.3649,  1.3254,  1.3109, -0.9340,  0.2924,  0.0856, 3.557830810546875]
+        right0 = [0.4007,  0.7105,  1.2358, -1.1160, -0.4419, -0.2401, 3.557830810546875]
+        left1 = [-0.3649,  1.3254,  1.3109, -0.9340,  0.2924,  0.0856, -0.3393220901489258]
+        right1 = [0.4007,  0.7105,  1.2358, -1.1160, -0.4419, -0.2401, -0.3397035598754883]
+
+        self.ros_operator.puppet_arm_publish_continuous(left0, right0)
+        input("Put the juicer in the gripper and press any key to continue:")
+        self.ros_operator.puppet_arm_publish_continuous(left1, right1)
+
+    def init_takemangobeverage(self,): # init status: 5
+        left0 = [-0.1436,  0.8261,  0.6506, -0.3458,  0.3363,  0.1150, 3.557830810546875]
+        right0 = [0.4515,  0.7757,  1.0962, -0.7845, -0.4694, -0.2016, 3.557830810546875]
+        left1 = [-0.1436,  0.8261,  0.6506, -0.3458,  0.3363,  0.1150, -0.3393220901489258]
+        right1 = [0.4515,  0.7757,  1.0962, -0.7845, -0.4694, -0.2016, -0.3397035598754883]
+
+        self.ros_operator.puppet_arm_publish_continuous(left0, right0)
+        input("Put the juicer in the gripper and press any key to continue:")
+        self.ros_operator.puppet_arm_publish_continuous(left1, right1)
+
+    def init_openmangobeveragelid(self,): # init status: 6
+        left0 = [-0.3252,  1.9350,  0.9207,  0.6556,  0.2321,  0.1616, 3.557830810546875]
+        right0 = [0.3782,  0.9047,  1.0180, -0.4465, -0.2939, -0.1616, 3.557830810546875]
+        left1 = [-0.3252,  1.9350,  0.9207,  0.6556,  0.2321,  0.1616, -0.3393220901489258]
+        right1 = [0.3782,  0.9047,  1.0180, -0.4465, -0.2939, -0.1616, -0.3397035598754883]
+
+        self.ros_operator.puppet_arm_publish_continuous(left0, right0)
+        input("Put the juicer in the gripper and press any key to continue:")
+        self.ros_operator.puppet_arm_publish_continuous(left1, right1)
+
+    def init_pourmangobeverage(self,): # init status: 7
+        left0 = [-0.7296,  1.1484,  0.8383, -0.3450,  0.1810,  0.3599, 3.557830810546875]
+        right0 = [0.3153,  0.9161,  1.4391, -1.0973, -0.4320, -0.0620, 3.557830810546875]
+        left1 = [-0.7296,  1.1484,  0.8383, -0.3450,  0.1810,  0.3599, -0.3393220901489258]
+        right1 = [0.3153,  0.9161,  1.4391, -1.0973, -0.4320, -0.0620, -0.3397035598754883]
+
+        self.ros_operator.puppet_arm_publish_continuous(left0, right0)
+        input("Put the juicer in the gripper and press any key to continue:")
+        self.ros_operator.puppet_arm_publish_continuous(left1, right1)
+
     def relative_init(self,):
         left = [-0.184062,  0.70782757,  0.67425823, -0.32215595,  0.52929688, -0.25425339,  1.70061493]
         right = [0.4262991 ,  0.57011509,  0.97142792, -0.88673973, -0.20962048,  0.20199108, -0.00686646]
@@ -46,6 +117,7 @@ class AlohaManipulationTestEnviManager():
 
     def inference(self,):
         self.init_check()
+        #self.init_pourmangobeverage()
 
         if self.cfg['EVAL']['CHUNK_SMOOTH'] > 0:
             action_deque = deque(maxlen = self.cfg['EVAL']['CHUNK_SMOOTH'])
@@ -56,6 +128,8 @@ class AlohaManipulationTestEnviManager():
         freq_controller = rospy.Rate(self.ros_args.publish_rate)
         with torch.inference_mode():
             cur_status = torch.zeros((1,), dtype = torch.long).cuda()
+            #cur_status[0] = 1
+
             if self.cfg['TASK_NAME'] == 'aloha_singleobjgrasp':
                 task_instruction = 'Put the snack into the bin.'
             elif self.cfg['TASK_NAME'] == 'aloha_beverage':
@@ -116,7 +190,7 @@ class AlohaManipulationTestEnviManager():
 
                 # Get and save observation data
                 norm_effort, norm_qpos, norm_qvel, imgs, latest_qpos_unnorm = self.get_observation()
-                
+
                 # Prepare an action to execute
                 action_to_execute = smooth_action_pred[0, action_cnt].clone() # Left shape: (joint_dim,)
                 interp_flag = (smooth_action_pred[0, action_cnt] - latest_qpos_unnorm).abs() > self.init_moving_max_gap
