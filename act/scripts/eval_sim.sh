@@ -1,5 +1,5 @@
-exp_id=isaac_multicolorbox_gridmask
-config_name=isaac_multicolorbox_gridmask
+exp_id=aloha_pourblueplate
+config_name=aloha_pourblueplate
 
 nnodes=1
 nproc_per_node=1

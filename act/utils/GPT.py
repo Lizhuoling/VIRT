@@ -124,7 +124,7 @@ def run_gpt_api(app_infos,
 if __name__ == "__main__":
 
     response, response_info = run_gpt_api(app_infos=app_infos, 
-                user_prompt="我用深度学习训练一个模型预测一条运动轨迹，模型的输出是接下来N步运动的绝对空间位置，目前输出的轨迹不够平滑。我希望在损失中加入让速度和加速度变化更平滑的项，请问在torch下代码该怎么写",
+                user_prompt="I am writting an academic paper and need a quotes said by famous people that helps introduce the idea that vision describes a concept more clearly than text, like '“Color is the place where our brain and the universe meet'. Please give me both sayings and their authors.",
                 system_prompt="You are an expert in Computer.",
                 gpt_model="OPENAI_GPT_4_O_PREVIEW",
                 image_path=None)
