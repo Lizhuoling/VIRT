@@ -48,28 +48,52 @@ class AlohaYOLOv10():
             det_cls_id_list = []
             for status_ele in status.detach().cpu().numpy():
                 # 'mango_beverage', 'blue_plate', 'cup', 'juicer_cup'
-                if status_ele == 0:
-                    det_cls_name = 'juicer_cup'
-                elif status_ele == 1:
-                    det_cls_name = 'juicer_cup'
-                elif status_ele == 2:
-                    det_cls_name = 'blue_plate'
-                elif status_ele == 3:
-                    det_cls_name = 'blue_plate'
-                elif status_ele == 4:
-                    det_cls_name = 'blue_plate'
-                elif status_ele == 5:
-                    det_cls_name = 'mango_beverage'
-                elif status_ele == 6:
-                    det_cls_name = 'mango_beverage'
-                elif status_ele == 7:
-                    det_cls_name = 'mango_beverage'
-                elif status_ele == 8:
-                    det_cls_name = 'mango_beverage'
-                elif status_ele == 9:
-                    det_cls_name = 'juicer_cup'
+                if self.cfg['TASK_NAME'] == 'aloha_beverage':
+                    if status_ele == 0:
+                        det_cls_name = 'juicer_cup'
+                    elif status_ele == 1:
+                        det_cls_name = 'juicer_cup'
+                    elif status_ele == 2:
+                        det_cls_name = 'blue_plate'
+                    elif status_ele == 3:
+                        det_cls_name = 'blue_plate'
+                    elif status_ele == 4:
+                        det_cls_name = 'blue_plate'
+                    elif status_ele == 5:
+                        det_cls_name = 'mango_beverage'
+                    elif status_ele == 6:
+                        det_cls_name = 'mango_beverage'
+                    elif status_ele == 7:
+                        det_cls_name = 'mango_beverage'
+                    elif status_ele == 8:
+                        det_cls_name = 'mango_beverage'
+                    elif status_ele == 9:
+                        det_cls_name = 'juicer_cup'
+                    else:
+                        raise NotImplementedError
+                elif self.cfg['TASK_NAME'] == 'aloha_pourblueplate':
+                    if status_ele == 0:
+                        det_cls_name = 'juicer_cup'
+                    elif status_ele == 1:
+                        det_cls_name = 'juicer_cup'
+                    elif status_ele == 2:
+                        det_cls_name = 'blue_plate'
+                    elif status_ele == 3:
+                        det_cls_name = 'blue_plate'
+                    elif status_ele == 4:
+                        det_cls_name = 'blue_plate'
+                    else:
+                        raise NotImplementedError
+                elif self.cfg['TASK_NAME'] == 'aloha_openlid':
+                    if status_ele == 0:
+                        det_cls_name = 'mango_beverage'
+                    elif status_ele == 1:
+                        det_cls_name = 'mango_beverage'
+                    else:
+                        raise NotImplementedError
                 else:
                     raise NotImplementedError
+                
                 det_cls_id = name_to_id_dict[det_cls_name]
                 det_cls_id_list.append(det_cls_id)
             det_cls_ids = np.repeat(np.array(det_cls_id_list)[:, None], num_cam, axis = 1).reshape(bs * num_cam)   # Left shape: (bs * num_cam,)

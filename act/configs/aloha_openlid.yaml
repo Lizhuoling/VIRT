@@ -1,6 +1,6 @@
 __BASE__: "Base.yaml"
 
-TASK_NAME: 'aloha_beverage'
+TASK_NAME: 'aloha_openlid'
 
 POLICY:
   POLICY_NAME: "AlohaGripper_ACT"

@@ -1,5 +1,5 @@
-exp_id=aloha_beverage
-config_name=aloha_beverage
+exp_id=aloha_openlid
+config_name=aloha_openlid
 
 nnodes=1
 nproc_per_node=1
