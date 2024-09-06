@@ -72,6 +72,7 @@ class AlohaGripperDETR(nn.Module):
         if 'past_action' in self.cfg['DATA']['INPUT_KEYS']:
             self.past_action_mlp = nn.Linear(14, hidden_dim)  # Past action information encoding
             self.past_action_pos_emb = nn.Embedding(self.cfg['DATA']['PAST_ACTION_LEN'], hidden_dim)
+            self.latest_action_mlp = nn.Linear(14, hidden_dim)
         if 'observations/effort_obs' in self.cfg['DATA']['INPUT_KEYS'] or 'observations/qpos_obs' in self.cfg['DATA']['INPUT_KEYS'] or 'observations/qvel_obs' in self.cfg['DATA']['INPUT_KEYS']:
             self.obs_pos_emb = nn.Embedding(self.cfg['DATA']['PAST_OBSERVATION_LEN'], hidden_dim)
             if 'observations/effort_obs' in self.cfg['DATA']['INPUT_KEYS']:
@@ -80,7 +81,6 @@ class AlohaGripperDETR(nn.Module):
             if 'observations/qpos_obs' in self.cfg['DATA']['INPUT_KEYS']:
                 self.qpos_obs_mlp = nn.Linear(14, hidden_dim)
                 self.qpos_obs_pos_emb = nn.Embedding(1, hidden_dim)
-                self.cur_qpos_obs_mlp = nn.Linear(14, hidden_dim)
             if 'observations/qvel_obs' in self.cfg['DATA']['INPUT_KEYS']:
                 self.qvel_obs_mlp = nn.Linear(14, hidden_dim)
                 self.qvel_obs_pos_emb = nn.Embedding(1, hidden_dim)
@@ -167,11 +167,11 @@ class AlohaGripperDETR(nn.Module):
             mask = torch.cat((mask, observation_is_pad), dim = 1) # Left shape: (B, L)
 
         # Add the current qpos observation token to all tokens.
-        if 'observations/qpos_obs' in self.cfg['DATA']['INPUT_KEYS']:
-            cur_qpos_obs = qpos_obs[:, :1, :]  # Left shape: (B, 1, joint_dim)
-            cur_qpos_emb = self.cur_qpos_obs_mlp(cur_qpos_obs).permute(1, 0, 2) # Left shape: (1, B, C)
-            src = src + cur_qpos_emb
-
+        if 'past_action' in self.cfg['DATA']['INPUT_KEYS']:
+            latest_past_action = past_action[:, -1:, :]  # Left shape: (B, 1, joint_dim)
+            latest_action_emb = self.latest_action_mlp(latest_past_action).permute(1, 0, 2) # Left shape: (1, B, C)
+            src = src + latest_action_emb
+        
         if self.cfg['POLICY']['STATUS_PREDICT']:
             status_pos_emb = self.status_emb.weight[status][None] # Left shape: (1, B, C)
             src = src + status_pos_emb
