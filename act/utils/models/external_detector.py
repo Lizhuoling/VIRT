@@ -15,7 +15,7 @@ def get_detector(cfg,):
         return SingleColorFilter(cfg)
     elif cfg["POLICY"]["EXTERNAL_DET"] == "LanguageMultiColorFilter":
         return LanguageMultiColorFilter(cfg)
-    elif cfg["POLICY"]["EXTERNAL_DET"] in ["YOLOv10_airphonebox", "YOLOv10_beverage"]:
+    elif cfg["POLICY"]["EXTERNAL_DET"] in ["YOLOv10_airphonebox", "YOLOv10_beverage", "YOLOv10_openlid", "YOLOv10_pourblueperry"]:
         return AlohaYOLOv10(cfg)
     
 class AlohaYOLOv10():
@@ -85,10 +85,12 @@ class AlohaYOLOv10():
                     else:
                         raise NotImplementedError
                 elif self.cfg['TASK_NAME'] == 'aloha_openlid':
+                    det_cls_name = 'lid'
+                elif self.cfg['TASK_NAME'] == 'aloha_pourblueberry':
                     if status_ele == 0:
-                        det_cls_name = 'mango_beverage'
+                        det_cls_name = 'juicer_cup'
                     elif status_ele == 1:
-                        det_cls_name = 'mango_beverage'
+                        det_cls_name = 'blue_plate'
                     else:
                         raise NotImplementedError
                 else:
