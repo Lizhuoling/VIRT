@@ -63,6 +63,7 @@ class AlohaGripperDataset(torch.utils.data.Dataset):
             start_ts = hdf5_frame_id
             
             past_obs_len, obs_sample_interval = self.cfg['DATA']['PAST_OBSERVATION_LEN'], self.cfg['DATA']['OBSERVATION_SAMPLE_INTERVAL']
+            obs_sample_interval = obs_sample_interval * self.cfg['DATA']['ACTION_SAMPLE_INTERVAL']
             if start_ts >= (past_obs_len - 1) * obs_sample_interval:
                 effort_obs = root['/observations/effort_obs'][start_ts - (past_obs_len - 1) * obs_sample_interval : start_ts + 1 : obs_sample_interval]
                 qpos_obs = root['/observations/qpos_obs'][start_ts - (past_obs_len - 1) * obs_sample_interval : start_ts + 1 : obs_sample_interval]
@@ -87,6 +88,7 @@ class AlohaGripperDataset(torch.utils.data.Dataset):
                 image_dict[cam_name] = self.load_video_frame(video_path, start_ts)
             
             past_action_len, past_action_interval = self.cfg['DATA']['PAST_ACTION_LEN'], self.cfg['DATA']['PAST_ACTION_SAMPLE_INTERVAL']
+            past_action_interval = past_action_interval * self.cfg['DATA']['ACTION_SAMPLE_INTERVAL']
             past_action = np.zeros((past_action_len, root['/action'][:].shape[1]), np.float32)
             if start_ts >= (past_action_len - 1) * past_action_interval:
                 past_action = root['/action'][start_ts - (past_action_len - 1) * past_action_interval : start_ts + 1 : past_action_interval]

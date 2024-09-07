@@ -42,8 +42,8 @@ DATA:
   ROI_RESIZE_SHAPE: [322, 238]
   INPUT_KEYS: ['observations/effort_obs', 'observations/qpos_obs', 'observations/qvel_obs', 'past_action']
   NORM_KEYS: ['action', 'observations/effort_obs', 'observations/qpos_obs', 'observations/qvel_obs']
-  PAST_OBSERVATION_LEN: 20  # 40
-  OBSERVATION_SAMPLE_INTERVAL: 10 # 1 bug
-  PAST_ACTION_LEN: 5  # 40
-  PAST_ACTION_SAMPLE_INTERVAL: 1  # 1 bug
+  PAST_OBSERVATION_LEN: 40
+  OBSERVATION_SAMPLE_INTERVAL: 1
+  PAST_ACTION_LEN: 40
+  PAST_ACTION_SAMPLE_INTERVAL: 1
   ACTION_SAMPLE_INTERVAL: 4

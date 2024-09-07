@@ -24,7 +24,7 @@ TRAIN:
   NUM_ITERATIONS: 20000
   LOG_INTERVAL: 100
   SAVE_CHECKPOINT_INTERVAL: 1000
-  BATCH_SIZE: 18
+  BATCH_SIZE: 16
   LR: 0.00001
   LR_BACKBONE: 0.000001
   DECAY_LR_ITER_STEPS: []
@@ -42,8 +42,8 @@ DATA:
   ROI_RESIZE_SHAPE: [322, 238]
   INPUT_KEYS: ['observations/effort_obs', 'observations/qpos_obs', 'observations/qvel_obs', 'past_action']
   NORM_KEYS: ['action', 'observations/effort_obs', 'observations/qpos_obs', 'observations/qvel_obs']
-  PAST_OBSERVATION_LEN: 20
-  OBSERVATION_SAMPLE_INTERVAL: 10
-  PAST_ACTION_LEN: 5
+  PAST_OBSERVATION_LEN: 40
+  OBSERVATION_SAMPLE_INTERVAL: 1
+  PAST_ACTION_LEN: 40
   PAST_ACTION_SAMPLE_INTERVAL: 1
-  ACTION_SAMPLE_INTERVAL: 1
+  ACTION_SAMPLE_INTERVAL: 4

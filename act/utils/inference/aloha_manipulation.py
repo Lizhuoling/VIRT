@@ -46,10 +46,10 @@ class AlohaManipulationTestEnviManager():
         self.ros_operator.puppet_arm_publish_continuous(left, right)
 
     def init_openlid(self,):
-        left0 = [7.95373917e-02,  3.73273849e-01,  2.83246040e-01, -5.01642227e-02, 3.22537422e-01, -5.72204590e-04,  3.557830810546875]
-        right0 = [3.29980850e-02, 2.76378632e-01,  3.41610909e-01, -2.39376068e-01,  1.53162003e-01, 1.31036758e-01, 3.557830810546875]
-        left1 = [7.95373917e-02,  3.73273849e-01,  2.83246040e-01, -5.01642227e-02, 3.22537422e-01, -5.72204590e-04,  -0.3393220901489258]
-        right1 = [3.29980850e-02, 2.76378632e-01,  3.41610909e-01, -2.39376068e-01,  1.53162003e-01, 1.31036758e-01, -0.3393220901489258]
+        left0 = [-0.55714512,  0.80891895,  0.97867584, -0.33932209,  0.45300198, 0.03299809,  3.557830810546875]
+        right0 = [0.68036175,  0.91001034,  1.32886982, -0.50564575, -0.65442085, -0.04940128, 3.557830810546875]
+        left1 = [-0.55714512,  0.80891895,  0.97867584, -0.33932209,  0.45300198, 0.03299809,  -0.3393220901489258]
+        right1 = [0.68036175,  0.91001034,  1.32886982, -0.50564575, -0.65442085, -0.04940128 -0.3393220901489258]
 
         self.ros_operator.puppet_arm_publish_continuous(left0, right0)
         input("Press any key to continue:")
@@ -119,11 +119,11 @@ class AlohaManipulationTestEnviManager():
                             smooth_action_pred = torch.Tensor(smooth_action_pred).cuda() # Left shape: (1, predict_len, joint_dim).
                             smooth_action_pred = smooth_action_pred[:, :self.cfg['EVAL']['VALID_CHUNK']]    # Left shape: (1, valid_chunk_size, joint_dim).
                             action_cnt = 0
-                            cur_status = status_pred.clone()
+                            if status_pred != None: cur_status = status_pred.clone()
                     else:
                         smooth_action_pred = actions_pred[:, :self.cfg['EVAL']['VALID_CHUNK']].clone()
                         action_cnt = 0
-                        cur_status = status_pred.clone()
+                        if status_pred != None: cur_status = status_pred.clone()
 
                 # Get and save observation data
                 norm_effort, norm_qpos, norm_qvel, imgs, latest_qpos_unnorm = self.get_observation()
