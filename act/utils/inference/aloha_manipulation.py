@@ -130,16 +130,20 @@ class AlohaManipulationTestEnviManager():
 
                 # Prepare an action to execute
                 action_to_execute = smooth_action_pred[0, action_cnt].clone() # Left shape: (joint_dim,)
-                interp_flag = (smooth_action_pred[0, action_cnt] - latest_qpos_unnorm).abs() > self.init_moving_max_gap
-                interp_flag = interp_flag.cpu()
-                interp_flag[[6, 13]] = False    # The gripper closing does not need to be interpolated.
-                interp_flag = interp_flag.cuda()
-                next_predict_action = False
-                if interp_flag.sum() == 0:  # No interpolation is needed
+                if self.cfg['EVAL']['LIMIT_MAX_MOVE']:
+                    interp_flag = (smooth_action_pred[0, action_cnt] - latest_qpos_unnorm).abs() > self.init_moving_max_gap
+                    interp_flag = interp_flag.cpu()
+                    interp_flag[[6, 13]] = False    # The gripper closing does not need to be interpolated.
+                    interp_flag = interp_flag.cuda()
+                    next_predict_action = False
+                    if interp_flag.sum() == 0:  # No interpolation is needed
+                        action_cnt += 1
+                        next_predict_action = True
+                    else:
+                        action_to_execute = torch.where(interp_flag, latest_qpos_unnorm + (smooth_action_pred[0, action_cnt] - latest_qpos_unnorm).sign() * self.init_moving_max_gap, action_to_execute)
+                else:
                     action_cnt += 1
                     next_predict_action = True
-                else:
-                    action_to_execute = torch.where(interp_flag, latest_qpos_unnorm + (smooth_action_pred[0, action_cnt] - latest_qpos_unnorm).sign() * self.init_moving_max_gap, action_to_execute)
 
                 if next_predict_action:
                     effort_obs_list.append(norm_effort)

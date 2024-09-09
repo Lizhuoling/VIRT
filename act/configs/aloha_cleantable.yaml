@@ -35,6 +35,7 @@ EVAL:
   INFERENCE_MAX_STEPS: 2000
   VALID_CHUNK: 5
   CHUNK_SMOOTH: -1
+  LIMIT_MAX_MOVE: True
 
 DATA:
   CAMERA_NAMES: ['cam_high', 'cam_left_wrist', 'cam_right_wrist']
