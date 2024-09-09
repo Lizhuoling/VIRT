@@ -81,6 +81,16 @@ class AlohaManipulationTestEnviManager():
             action_step, action_cnt = 0, 0 # action_step is the total actions number that have been executed, and action_cnt is the number in the local action sequence.
             
             while action_step < self.cfg['EVAL']['INFERENCE_MAX_STEPS'] and not rospy.is_shutdown():
+
+                # for evaluating aloha_cleantable
+                if action_step >= 0 and action_step < 400:
+                    cur_status[0] = 1
+                elif action_step >= 400 and action_step < 800:
+                    cur_status[0] = 0
+                elif action_step >= 800 and action_step < 1200:
+                    cur_status[0] = 2
+                print(f"action_step: {action_step}, cur_status: {cur_status}")
+
                 # When no action has been predicted or all actions have been executed, the policy predicts new actions.
                 if smooth_action_pred == None or action_cnt >= smooth_action_pred.shape[1] or self.cfg['EVAL']['CHUNK_SMOOTH'] > 0:
                     if len(action_list) == 0:   # This part will only be executed in the beginning of the inference.

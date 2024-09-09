@@ -1,5 +1,5 @@
-exp_id=aloha_openlid
-config_name=aloha_openlid
+exp_id=aloha_cleantable
+config_name=aloha_cleantable
 
 nnodes=1
 nproc_per_node=1
