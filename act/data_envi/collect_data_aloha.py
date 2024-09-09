@@ -414,6 +414,6 @@ def collect_data_main(task_name, save_data_path = "", total_episodes = 1):
 
 if __name__ == '__main__':
     task_name = 'aloha_openlid'
-    save_data_path = '/home/agilex/twilight/data/aloha_beverage/aloha_beverage'
+    save_data_path = '/home/agilex/twilight/data/aloha_openlid/aloha_openlid'
 
-    collect_data_main(task_name = task_name, save_data_path = save_data_path, total_episodes = 100)
+    collect_data_main(task_name = task_name, save_data_path = save_data_path, total_episodes = 120)

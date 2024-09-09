@@ -256,7 +256,7 @@ class DataSegmentAnnotationTool:
         self.show_frame(self.current_frame)
 
 if __name__ == '__main__':
-    root_path = '/home/cvte/twilight/data/aloha_openlid/aloha_openlid'
+    root_path = '/home/cvte/twilight/data/aloha_cleantable/aloha_cleantable'
     root = tk.Tk()
     app = DataSegmentAnnotationTool(root, root_path)
     root.mainloop()

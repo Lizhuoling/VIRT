@@ -122,7 +122,7 @@ def eval_bc(cfg, ckpt_path, save_episode=True):
     elif cfg['TASK_NAME'] == 'isaac_fiveboxred':
         from utils.inference.isaac_fiveboxred import IsaacFiveBoxRedTestEnviManager
         envi_manager = IsaacFiveBoxRedTestEnviManager(cfg, policy, stats)
-    elif cfg['TASK_NAME'] in ['aloha_singleobjgrasp', 'aloha_beverage', 'aloha_pourblueplate', 'aloha_openlid', 'aloha_pourblueberry']:
+    elif cfg['TASK_NAME'] in ['aloha_singleobjgrasp', 'aloha_beverage', 'aloha_pourblueplate', 'aloha_openlid', 'aloha_pourblueberry', 'aloha_cleantable']:
         from act.utils.inference.aloha_manipulation import AlohaManipulationTestEnviManager
         envi_manager = AlohaManipulationTestEnviManager(cfg, policy, stats)
     else:
