@@ -1,5 +1,5 @@
-exp_id=aloha_openlid
-config_name=aloha_openlid
+exp_id=aloha_cleantable
+config_name=aloha_cleantable
 
 nnodes=1
 nproc_per_node=1
@@ -11,7 +11,7 @@ CUDA_VISIBLE_DEVICES=1 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_nod
     imitate_episodes.py \
     --config_name $config_name \
     --save_dir ./outputs/$exp_id \
-    --data_dir datasets/aloha_openlid \
+    --data_dir datasets/aloha_cleantable \
     --num_nodes $nnodes \
     --load_pretrain outputs/pretrained_weight/droid_pretrain_dec_114k.ckpt \
     #--debug \

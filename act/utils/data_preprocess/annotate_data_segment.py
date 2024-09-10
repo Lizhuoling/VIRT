@@ -77,7 +77,7 @@ class DataSegmentAnnotationTool:
         video_id.pack(padx=10, pady=5)
         self.video_label_entry = tk.Entry(root, font = ("Helvetica", 16))
         self.video_label_entry.pack(padx=10, pady=5)
-        self.video_label_entry.insert(0, "3")
+        self.video_label_entry.insert(0, "0")
 
         self.frame_slider = tk.Scale(self.control_panel, orient="horizontal", command=self.slide_frame, length=600,)
         self.frame_slider.pack(fill="x")
@@ -255,8 +255,19 @@ class DataSegmentAnnotationTool:
         
         self.show_frame(self.current_frame)
 
+def check_keyframe_in_files(root_path):
+    h5py_path = os.path.join(root_path, 'h5py')
+    for filename in sorted(os.listdir(h5py_path)):
+        if filename.endswith('.h5py'):
+            h5py_f = h5py.File(os.path.join(h5py_path, filename), 'r')
+            assert 'seg_keyframe' in h5py_f.keys(), "seg_keyframe not in {}".format(filename)
+
+            h5py_f.close()
+
 if __name__ == '__main__':
-    root_path = '/home/cvte/twilight/data/aloha_cleantable/aloha_cleantable'
+    root_path = '/home/cvte/twilight/data/aloha_pourblueberry/aloha_pourblueberry'
     root = tk.Tk()
     app = DataSegmentAnnotationTool(root, root_path)
     root.mainloop()
+
+    #check_keyframe_in_files(root_path)
