@@ -56,9 +56,18 @@ class AlohaManipulationTestEnviManager():
         self.ros_operator.puppet_arm_publish_continuous(left1, right1)
         input("Press any key to continue:")
 
+    def init_cleantable(self,):
+        left0 = [-0.43965054,  0.50831604,  1.21099377, -1.0667963 ,  0.21076488, 0.10433388,  3.27534485,]
+        right0 = [0.23556137,  0.12989235,  0.79366016, -1.02788544,  0.02384186, -0.01850128, -0.05264282]
+
+        self.ros_operator.puppet_arm_publish_continuous(left0, right0)
+        input("Press any key to continue:")
+
     def inference(self,):
         if self.cfg['TASK_NAME'] == 'aloha_openlid':
             self.init_openlid()
+        elif self.cfg['TASK_NAME'] == 'aloha_cleantable':
+            self.init_cleantable()
         else:
             self.init_check()
 

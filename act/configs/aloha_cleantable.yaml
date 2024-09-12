@@ -6,7 +6,7 @@ POLICY:
   POLICY_NAME: "AlohaGripper_ACT"
   BACKBONE: "dinov2_s"
   BACKBONE_PATH: "./pretrained/dinov2_vits14_pretrain.pth"
-  CHUNK_SIZE: 5
+  CHUNK_SIZE: 20
   STATE_DIM: 14
   ENC_LAYERS: 0
   DEC_LAYERS: 3
@@ -19,7 +19,6 @@ POLICY:
   STATUS_NUM: 3
   STATUS_PREDICT: True
   GRID_MASK: True
-  ACTION_REPEAT_FACTOR: 10
 
 TRAIN:
   NUM_ITERATIONS: 20000
@@ -44,8 +43,8 @@ DATA:
   ROI_RESIZE_SHAPE: [322, 238]
   INPUT_KEYS: ['observations/effort_obs', 'observations/qpos_obs', 'observations/qvel_obs', 'past_action']
   NORM_KEYS: ['action', 'observations/effort_obs', 'observations/qpos_obs', 'observations/qvel_obs']
-  PAST_OBSERVATION_LEN: 40
-  OBSERVATION_SAMPLE_INTERVAL: 1
-  PAST_ACTION_LEN: 40
+  PAST_OBSERVATION_LEN: 1
+  OBSERVATION_SAMPLE_INTERVAL: 10
+  PAST_ACTION_LEN: 1
   PAST_ACTION_SAMPLE_INTERVAL: 1
-  ACTION_SAMPLE_INTERVAL: 1
+  ACTION_SAMPLE_INTERVAL: 3
