@@ -1,4 +1,4 @@
-exp_id=aloha_cleantable
+exp_id=aloha_cleantable2
 config_name=aloha_cleantable
 
 nnodes=1
@@ -11,9 +11,9 @@ CUDA_VISIBLE_DEVICES=1 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_nod
     imitate_episodes.py \
     --config_name $config_name \
     --save_dir ./outputs/$exp_id \
-    --data_dir datasets/aloha_cleantable \
+    --data_dir datasets/aloha_cleantable2 \
     --num_nodes $nnodes \
     --load_pretrain outputs/pretrained_weight/droid_pretrain_dec_114k.ckpt \
     #--debug \
     #--real_robot \
-    #--load_dir outputs/droid_pretrain_dec/policy_latest.ckpt \
+    #--load_dir outputs/aloha_cleantable/policy_latest.ckpt \

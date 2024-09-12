@@ -51,4 +51,4 @@ def process_data(ori_path, save_path, start_idx=0):
     print('Done!')
 
 if __name__ == '__main__':
-    process_data(ori_path = '/home/cvte/twilight/home/data/aloha_grasp/src', save_path = '/home/cvte/twilight/home/data/aloha_grasp/converted', start_idx = 0)
+    process_data(ori_path = '/home/cvte/twilight/home/data/grasp_toy/src', save_path = '/home/cvte/twilight/home/data/grasp_toy/convert', start_idx = 0)

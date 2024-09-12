@@ -124,10 +124,8 @@ def run_gpt_api(app_infos,
 if __name__ == "__main__":
 
     response, response_info = run_gpt_api(app_infos=app_infos, 
-                user_prompt="Previously I have published an academic paper about monocular 3D object detection. As I unify indoor and outdoor detection in that work, the paper name is unified \
-                    'monocular 3D object detection'. Now I have improved that work and make the method also support RGBD 3D object detection but does not support depth only detection. What \
-                    should the new paper titles be? Give me some proposals.",
-                system_prompt="You are an expert in academic paper writting.",
+                user_prompt="This strategy is to mimic the effect of human gaze in guiding future actions and concentrating a small and important region",
+                system_prompt="Please help me express the following content in a more professional and academic tone",
                 gpt_model="OPENAI_GPT_4_O_PREVIEW",
                 image_path=None)
 

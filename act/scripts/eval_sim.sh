@@ -1,11 +1,11 @@
-exp_id=isaac_multicolorbox_gridmask
-config_name=isaac_multicolorbox_gridmask
+exp_id=isaac_multicolorbox
+config_name=isaac_multicolorbox
 
 nnodes=1
 nproc_per_node=1
 node_rank=0
 master_addr=127.0.0.1
-master_port=29515
+master_port=29514
 
 CUDA_VISIBLE_DEVICES=0 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_node --node_rank=$node_rank --master_addr=$master_addr --master_port $master_port \
     imitate_episodes.py \

@@ -62,12 +62,43 @@ def vis_aloha_action(h5py_path, start_idx, sample_gap, vis_len):
     plt.tight_layout()
     plt.savefig('vis.png')
 
+def reverse_video_channel(src_path, dst_path):
+    # Create a video capture object
+    cap = cv2.VideoCapture(src_path)
+
+    # Get video properties
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+
+    # Define the codec and create a video writer object
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # You can change 'mp4v' to 'XVID' or other codecs depending on your system
+    out = cv2.VideoWriter(dst_path, fourcc, fps, (frame_width, frame_height))
+
+    # Read until video is completed
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # Convert BGR to RGB
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # Write the RGB frame to the output video
+        out.write(rgb_frame)
+
+    # Release everything if job is finished
+    cap.release()
+    out.release()
+    cv2.destroyAllWindows()
+
 
 if __name__ == '__main__':
     #vis_aloha_sim_h5py(h5py_file = '/home/twilight/home/data/aloha/sim_insertion_scripted/episode_0.hdf5', save_folder = '/home/twilight/home/data/aloha/vis')
     #h5py_file = '/home/twilight/home/data/own_data/episode_0.hdf5'
     #vis_self_data(h5py_file = h5py_file, save_folder = '/home/twilight/home/data/own_data/vis/episode_0', start_frame = 10, end_frame = 400)
-    vis_aloha_action(h5py_path = '/home/agilex/twilight/data/aloha_beverage/aloha_beverage/h5py/episode_32.hdf5', 
+    '''vis_aloha_action(h5py_path = '/home/agilex/twilight/data/aloha_beverage/aloha_beverage/h5py/episode_32.hdf5', 
                      start_idx = 1000,
                      sample_gap = 1,
-                     vis_len = 100)
+                     vis_len = 100)'''
+    reverse_video_channel(src_path = '/home/cvte/twilight/data/droid_h5py/exterior_image_2_left/episode_2000.mp4', dst_path = 'demo.mp4')

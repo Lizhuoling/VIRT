@@ -265,7 +265,7 @@ def check_keyframe_in_files(root_path):
             h5py_f.close()
 
 if __name__ == '__main__':
-    root_path = '/home/cvte/twilight/data/aloha_pourblueberry/aloha_pourblueberry'
+    root_path = '/home/cvte/twilight/data/aloha_cleantable/aloha_cleantable2'
     root = tk.Tk()
     app = DataSegmentAnnotationTool(root, root_path)
     root.mainloop()

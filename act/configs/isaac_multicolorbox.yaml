@@ -13,7 +13,7 @@ POLICY:
   DEC_LAYERS: 3
   USE_UNCERTAINTY: True
   UNCERTAINTY_RANGE: [-10, 10]
-  USE_CLIP: False
+  USE_CLIP: True
   CLIP_PATH: "./pretrained/CLIP_ckpts"
   EXTERNAL_DET: "LanguageMultiColorFilter"
   EXTERNAL_DET_SCALE_FACTOR: 4.0
