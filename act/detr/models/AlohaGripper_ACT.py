@@ -139,11 +139,15 @@ class AlohaGripperDETR(nn.Module):
         else:
             raise NotImplementedError
         mask = torch.zeros((bs, src.shape[0]), dtype=torch.bool).to(image.device)   # Left shape: (B, NHW)
-
+        
         # proprioception features
         if 'past_action' in self.cfg['DATA']['INPUT_KEYS']:
             past_action_src = self.past_action_mlp(past_action).permute(1, 0, 2)   # (past_action_len, B, C)
             past_action_pos = self.past_action_pos_emb.weight[:, None, :].expand(-1, bs, -1)  # (past_action_len, B, C)
+            if self.cfg['POLICY']['ACTION_REPEAT_FACTOR'] > 1:
+                past_action_src = past_action_src.repeat(self.cfg['POLICY']['ACTION_REPEAT_FACTOR'], 1, 1)
+                past_action_pos = past_action_pos.repeat(self.cfg['POLICY']['ACTION_REPEAT_FACTOR'], 1, 1)
+                past_action_is_pad = past_action_is_pad.repeat(1, self.cfg['POLICY']['ACTION_REPEAT_FACTOR'])
             src = torch.cat((src, past_action_src), dim = 0)  # Left shape: (L, B, C)
             pos = torch.cat((pos, past_action_pos), dim = 0)  # Left shape: (L, B, C)
             mask = torch.cat((mask, past_action_is_pad), dim = 1) # Left shape: (B, L)

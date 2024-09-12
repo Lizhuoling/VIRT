@@ -19,12 +19,13 @@ POLICY:
   STATUS_NUM: 3
   STATUS_PREDICT: True
   GRID_MASK: True
+  ACTION_REPEAT_FACTOR: 10
 
 TRAIN:
   NUM_ITERATIONS: 20000
   LOG_INTERVAL: 100
   SAVE_CHECKPOINT_INTERVAL: 1000
-  BATCH_SIZE: 32
+  BATCH_SIZE: 16
   LR: 0.00001
   LR_BACKBONE: 0.000001
   DECAY_LR_ITER_STEPS: []
@@ -39,8 +40,8 @@ EVAL:
 
 DATA:
   CAMERA_NAMES: ['cam_high', 'cam_left_wrist', 'cam_right_wrist']
-  IMG_RESIZE_SHAPE: [154, 112]
-  ROI_RESIZE_SHAPE: [154, 112]
+  IMG_RESIZE_SHAPE: [322, 238]
+  ROI_RESIZE_SHAPE: [322, 238]
   INPUT_KEYS: ['observations/effort_obs', 'observations/qpos_obs', 'observations/qvel_obs', 'past_action']
   NORM_KEYS: ['action', 'observations/effort_obs', 'observations/qpos_obs', 'observations/qvel_obs']
   PAST_OBSERVATION_LEN: 40
