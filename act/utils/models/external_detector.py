@@ -92,6 +92,7 @@ class AlohaYOLOv10():
                     elif status_ele == 1:
                         det_cls_name = 'blue_plate'
                     else:
+                        pdb.set_trace()
                         raise NotImplementedError
                 elif self.cfg['TASK_NAME'] == 'aloha_cleantable':
                     if status_ele == 0:

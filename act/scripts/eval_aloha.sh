@@ -1,5 +1,5 @@
-exp_id=aloha_cleantable
-config_name=aloha_cleantable
+exp_id=aloha_pourblueberry
+config_name=aloha_pourblueberry
 
 nnodes=1
 nproc_per_node=1

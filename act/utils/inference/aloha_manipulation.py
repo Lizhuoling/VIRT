@@ -92,12 +92,17 @@ class AlohaManipulationTestEnviManager():
             while action_step < self.cfg['EVAL']['INFERENCE_MAX_STEPS'] and not rospy.is_shutdown():
 
                 # for evaluating aloha_cleantable
-                if action_step >= 0 and action_step < 400:
-                    cur_status[0] = 1
-                elif action_step >= 400 and action_step < 800:
+                if action_step >= 0 and action_step < 250:
                     cur_status[0] = 0
-                elif action_step >= 800 and action_step < 1200:
+                elif action_step >= 250 and action_step < 500:
+                    cur_status[0] = 1
+                elif action_step >= 500 and action_step < 800:
                     cur_status[0] = 2
+                # for evaluating aloha_pourblueberry
+                '''if action_step >= 0 and action_step < 380:
+                    cur_status[0] = 0
+                elif action_step >= 300 and action_step < 2000:
+                    cur_status[0] = 1'''
                 print(f"action_step: {action_step}, cur_status: {cur_status}")
 
                 # When no action has been predicted or all actions have been executed, the policy predicts new actions.
