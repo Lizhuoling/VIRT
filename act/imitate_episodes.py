@@ -149,9 +149,10 @@ def eval_bc(cfg, ckpt_path, save_episode=True):
 
 def forward_pass(data, policy, cfg):
     if cfg['POLICY']['POLICY_NAME'] == 'ACT':
-        image_data, qpos_data, action_data, is_pad = data
+        image_data, qpos_data, action_data, is_pad, task_instruction = data
         image_data, qpos_data, action_data, is_pad = image_data.cuda(), qpos_data.cuda(), action_data.cuda(), is_pad.cuda()
-        return policy(qpos_data, image_data, action_data, is_pad)
+        
+        return policy(qpos_data, image_data, action_data, is_pad, task_instruction)
     elif cfg['POLICY']['POLICY_NAME'] == 'IsaacGripper_ACT':
         image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction_list, status = data
         

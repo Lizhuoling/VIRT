@@ -1,27 +1,31 @@
 __BASE__: "Base.yaml"
 
-TASK_NAME: 'isaac_singlecolorbox'
+TASK_NAME: 'isaac_singlebox'
 ONSCREEN_RENDER: True
 
 POLICY:
   POLICY_NAME: "IsaacGripper_ACT"
   BACKBONE: "dinov2_s"
+  BACKBONE_PATH: "./pretrained/dinov2_vits14_pretrain.pth"
   CHUNK_SIZE: 10
   STATE_DIM: 9
   ENC_LAYERS: 0
   DEC_LAYERS: 3
   USE_UNCERTAINTY: True
   UNCERTAINTY_RANGE: [-10, 10]
-  USE_CLIP: True
-  CLIP_PATH: "/home/cvte/twilight/home/data/ckpts/CLIP_ckpts"
+  USE_CLIP: False
+  CLIP_PATH: "./pretrained/CLIP_ckpts"
   EXTERNAL_DET: "SingleColorFilter"
   EXTERNAL_DET_SCALE_FACTOR: 4.0
+  STATUS_NUM: 1
+  STATUS_PREDICT: False
+  GRID_MASK: False
 
 TRAIN:
   NUM_ITERATIONS: 8000
   LOG_INTERVAL: 100
   SAVE_CHECKPOINT_INTERVAL: 1000
-  BATCH_SIZE: 32
+  BATCH_SIZE: 64
   LR: 0.00001
   LR_BACKBONE: 0.00001
   DECAY_LR_ITER_STEPS: []
@@ -29,7 +33,7 @@ TRAIN:
 
 EVAL:
   DATA_EVAL_RATIO: 0.0
-  INFERENCE_MAX_STEPS: 1000
+  INFERENCE_MAX_STEPS: 600
   TEST_ENVI_NUM: 100
   TEST_ENVI_BATCH_NUM: 5
   CTRL_STEP_INTERVAL: 2

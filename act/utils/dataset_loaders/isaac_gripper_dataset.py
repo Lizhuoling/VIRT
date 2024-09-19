@@ -106,7 +106,10 @@ class IsaacGripperDataset(torch.utils.data.Dataset):
             action_is_pad = np.zeros(self.cfg['POLICY']['CHUNK_SIZE'])
             action_is_pad[action_len:] = 1
 
-            task_instruction = np.array(root['/task_instruction']).item().decode('utf-8')
+            if self.cfg['TASK_NAME'] == 'isaac_singlebox':
+                task_instruction = 'red'
+            else:
+                task_instruction = np.array(root['/task_instruction']).item().decode('utf-8')
 
             if self.cfg['POLICY']['STATUS_PREDICT'] and 'seg_keyframe' in root.keys():
                 seg_keyframe = root['/seg_keyframe'][:] # Left shape: (key_num, 2). The first number is frame id and the second one is status id.
@@ -120,7 +123,7 @@ class IsaacGripperDataset(torch.utils.data.Dataset):
                 else:
                     status = seg_keyframe[-1][1]
             else:
-                status = None
+                status = 0
 
         # new axis for different cameras
         all_cam_images = []
@@ -152,7 +155,7 @@ class IsaacGripperDataset(torch.utils.data.Dataset):
         joint_observation = (joint_observation - self.norm_stats[jointobs_mean_key]) / self.norm_stats[jointobs_std_key]
 
         image_data = self.transforms(image_data)
-        
+
         return image_data, past_action, action_data, end_observation, joint_observation, observation_is_pad, past_action_is_pad, action_is_pad, task_instruction, status
 
     def retrieve_key(self, key_list, keyword):

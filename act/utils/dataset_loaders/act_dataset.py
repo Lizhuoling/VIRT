@@ -2,9 +2,11 @@ import numpy as np
 import torch
 import os
 import random
+import cv2
 import logging
 import pdb
 import h5py
+import math
 from torch.utils.data import TensorDataset, DataLoader
 from torchvision.transforms import functional as F
 import IPython
@@ -19,7 +21,8 @@ class ACTDataset(torch.utils.data.Dataset):
         self.cfg = cfg
         self.transforms = transforms
         self.norm_stats = norm_stats
-        self.ids_map_dict = ids_map_dict
+        self.ids_key_list = list(ids_map_dict.keys())
+        self.ids_start_array = np.array([ele[0] for ele in ids_map_dict.values()])
         self.indices = indices
         self.is_train = is_train
         self.dataset_dir = self.cfg['DATASET_DIR']
@@ -36,37 +39,55 @@ class ACTDataset(torch.utils.data.Dataset):
         return len(self.indices)
     
     def map_value_to_letter(self, index):
-        for hdf5_file, idx_range in self.ids_map_dict.items():
-            if idx_range[0] <= index <= idx_range[1]:
-                return hdf5_file, index - idx_range[0]
-        raise Exception('Value out of range')
+        range_id = np.searchsorted(self.ids_start_array, index, side = 'right') - 1
+        hdf5_file = self.ids_key_list[range_id]
+        return hdf5_file, index - self.ids_start_array[range_id]
+    
+    def load_video_frame(self, video_path, frame_id):
+        cap = cv2.VideoCapture(video_path)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_id)
+        ret, frame = cap.read()
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        cap.release()
+        return frame_rgb
 
     def __getitem__(self, index):
         if isinstance(index, torch.Tensor):
             index = index.item()
-        hdf5_file_name, hdf5_frame_id =  self.map_value_to_letter(index)
-        dataset_path = os.path.join(self.dataset_dir, hdf5_file_name)
-        with h5py.File(dataset_path, 'r') as root:
+        indice_index  = self.indices[index]
+        hdf5_file_name, hdf5_frame_id =  self.map_value_to_letter(indice_index)
+        h5py_path = os.path.join(self.dataset_dir, 'h5py', hdf5_file_name)
+        with h5py.File(h5py_path, 'r') as root:
             episode_len = root['/action'].shape[0]
             start_ts = hdf5_frame_id
 
             # get observation at start_ts only
-            qpos = root['/observations/qpos'][start_ts]
+            if 'end_observation' in root['observations'].keys():
+                qpos = root['/observations/end_observation'][start_ts]
+            else:
+                raise Exception("Not supported qpos format yet.")
+            
             image_dict = dict()
             for cam_name in self.camera_names:
-                image_dict[cam_name] = root[f'/observations/images/{cam_name}'][start_ts]
+                video_path = os.path.join(self.dataset_dir, cam_name, hdf5_file_name[:-4] + 'mp4')
+                image_dict[cam_name] = self.load_video_frame(video_path, start_ts)
             
-            if root['/action'].shape[0] > start_ts + self.cfg['POLICY']['CHUNK_SIZE']:
-                action = root['/action'][start_ts : start_ts + self.cfg['POLICY']['CHUNK_SIZE']]
+            action_sample_interval = self.cfg['DATA']['ACTION_SAMPLE_INTERVAL']
+            if root['/action'].shape[0] >= start_ts + self.cfg['POLICY']['CHUNK_SIZE'] * action_sample_interval + 1:
+                action = root['/action'][start_ts + 1 : start_ts + self.cfg['POLICY']['CHUNK_SIZE'] * action_sample_interval + 1 : action_sample_interval]
                 action_len = self.cfg['POLICY']['CHUNK_SIZE']
             else:
-                action = root['/action'][start_ts:]
-                action_len = episode_len - start_ts
+                action = root['/action'][start_ts + 1 :: action_sample_interval]
+                action_len = math.ceil((episode_len - start_ts - 1) / action_sample_interval)
+            padded_action = np.zeros((self.cfg['POLICY']['CHUNK_SIZE'], action.shape[1]), dtype=np.float32)
+            padded_action[:action_len] = action
+            is_pad = np.zeros(self.cfg['POLICY']['CHUNK_SIZE'])
+            is_pad[action_len:] = 1
 
-        padded_action = np.zeros((self.cfg['POLICY']['CHUNK_SIZE'], action.shape[1]), dtype=np.float32)
-        padded_action[:action_len] = action
-        is_pad = np.zeros(self.cfg['POLICY']['CHUNK_SIZE'])
-        is_pad[action_len:] = 1
+            if self.cfg['TASK_NAME'] == 'isaac_singlebox':
+                task_instruction = 'red'
+            else:
+                task_instruction = np.array(root['/task_instruction']).item().decode('utf-8')
 
         # new axis for different cameras
         all_cam_images = []
@@ -75,29 +96,19 @@ class ACTDataset(torch.utils.data.Dataset):
         all_cam_images = np.stack(all_cam_images, axis=0)
 
         # construct observations
-        image_data = torch.from_numpy(all_cam_images).float()   # left shape: (n, h, w, c)
+        image_data = torch.from_numpy(all_cam_images).float() / 255   # left shape: (n, h, w, c)
         qpos_data = torch.from_numpy(qpos).float()  # left shape: (pos_len, )
         action_data = torch.from_numpy(padded_action).float()   # left shape: (chunk_size, action_len)
         is_pad = torch.from_numpy(is_pad).bool()    # left shape: (chunk_size,)
-        
-        # channel last
         image_data = torch.einsum('k h w c -> k c h w', image_data)
-        
-        action_mean_key, action_std_key = self.retrieve_key(self.norm_stats.keys(), "action_mean"), self.retrieve_key(self.norm_stats.keys(), "action_std")
-        action_data = (action_data - self.norm_stats[action_mean_key]) / self.norm_stats[action_std_key]
 
-        qpos_mean_key, qpos_std_key = self.retrieve_key(self.norm_stats.keys(), "observations/qpos_mean"), self.retrieve_key(self.norm_stats.keys(), "observations/qpos_std")
-        qpos_data = (qpos_data - self.norm_stats[qpos_mean_key]) / self.norm_stats[qpos_std_key]
+        action_data = (action_data - self.norm_stats["action_mean"]) / self.norm_stats["action_std"]
+        if 'observations/end_observation_mean' in self.norm_stats.keys():
+            qpos_data = (qpos_data - self.norm_stats['observations/end_observation_mean']) / self.norm_stats['observations/end_observation_std']
 
         image_data, qpos_data, action_data, is_pad = self.transforms(image_data, qpos_data, action_data, is_pad)
 
-        return image_data, qpos_data, action_data, is_pad
-
-    def retrieve_key(self, key_list, keyword):
-        for key in key_list:
-            if keyword == key: return key
-
-        raise Exception("Keyword {} is not found in the key list {}".format(keyword, key_list))
+        return image_data, qpos_data, action_data, is_pad, task_instruction
     
 class ACTCompose():
     def __init__(self, transforms):

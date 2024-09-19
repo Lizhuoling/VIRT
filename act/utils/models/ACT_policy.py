@@ -14,25 +14,22 @@ class ACTPolicy(nn.Module):
         self.model = model.cuda() # CVAE decoder
         self.kl_weight = cfg['POLICY']['KL_WEIGHT']
 
-    def __call__(self, qpos, image, actions=None, is_pad=None):
-        env_state = None
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                         std=[0.229, 0.224, 0.225])
-        image = normalize(image)
+    def __call__(self, qpos, image, actions, is_pad, task_instruction):
         if actions is not None: # training time
-
-            a_hat, is_pad_hat, (mu, logvar) = self.model(qpos = qpos, image = image, env_state = env_state, actions = actions, is_pad = is_pad)
+            a_hat, is_pad_hat, (mu, logvar) = self.model(qpos = qpos, image = image, task_instruction = task_instruction, actions = actions, is_pad = is_pad)
             total_kld, dim_wise_kld, mean_kld = kl_divergence(mu, logvar)
             loss_dict = dict()
             all_l1 = F.l1_loss(actions, a_hat, reduction='none')
             l1 = (all_l1 * ~is_pad.unsqueeze(-1)).mean()
-            loss_dict['l1'] = l1
-            loss_dict['kl'] = total_kld[0]
-            loss_dict['loss'] = loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
-            return loss_dict
+            loss_dict['dec_0'] = l1.item()
+            loss_dict['kl'] = total_kld[0].item()
+            total_loss = l1 + total_kld[0] * self.kl_weight
+            loss_dict['loss'] = total_loss.item()
+
+            return total_loss, loss_dict
         else: # inference time
-            a_hat, _, (_, _) = self.model(qpos, image, env_state) # no action, sample from prior
-            return a_hat
+            a_hat, _, (_, _) = self.model(qpos, image, task_instruction) # no action, sample from prior
+            return a_hat, None
 
 def kl_divergence(mu, logvar):
     batch_size = mu.size(0)
