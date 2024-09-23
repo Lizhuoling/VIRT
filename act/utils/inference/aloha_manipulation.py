@@ -92,12 +92,12 @@ class AlohaManipulationTestEnviManager():
             while action_step < self.cfg['EVAL']['INFERENCE_MAX_STEPS'] and not rospy.is_shutdown():
 
                 # for evaluating aloha_cleantable
-                if action_step >= 0 and action_step < 250:
+                '''if action_step >= 0 and action_step < 250:
                     cur_status[0] = 0
                 elif action_step >= 250 and action_step < 500:
                     cur_status[0] = 1
                 elif action_step >= 500 and action_step < 800:
-                    cur_status[0] = 2
+                    cur_status[0] = 2'''
                 # for evaluating aloha_pourblueberry
                 '''if action_step >= 0 and action_step < 380:
                     cur_status[0] = 0
@@ -116,8 +116,12 @@ class AlohaManipulationTestEnviManager():
 
                     image, past_action, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, status = self.prepare_policy_input(effort_obs_list, qpos_obs_list, \
                                     qvel_obs_list, action_list, imgs, cur_status)
-                    norm_actions_pred, status_pred = self.policy(image = image, past_action = past_action.float(), action = None, effort_obs = effort_obs.float(), qpos_obs = qpos_obs.float(), qvel_obs = qvel_obs.float(), \
-                                    observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = None, status = status)  # Left shape: (1, T, 9)
+                    if self.cfg['POLICY']['POLICY_NAME'] == 'AlohaGripper_ACT':
+                        norm_actions_pred, status_pred = self.policy(image = image, past_action = past_action.float(), action = None, effort_obs = effort_obs.float(), qpos_obs = qpos_obs.float(), qvel_obs = qvel_obs.float(), \
+                                        observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = None, status = status)  # Left shape: (1, T, 9)
+                    elif self.cfg['POLICY']['POLICY_NAME'] == 'ACT':
+                        qpos_obs = qpos_obs[:, -1]    # Select the lastest qpos
+                        norm_actions_pred, _ = self.policy(qpos = qpos_obs, image = image, actions = None, is_pad = None, task_instruction = None)
                     action_mean, action_std = self.stats['action_mean'][None, None].to(image.device), self.stats['action_std'][None, None].to(image.device) # Left shape: (1, 1, action_dim), (1, 1, action_dim)
                     actions_pred = norm_actions_pred * action_std + action_mean
 

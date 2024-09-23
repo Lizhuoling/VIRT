@@ -9,6 +9,7 @@ import h5py
 import math
 from torch.utils.data import TensorDataset, DataLoader
 from torchvision.transforms import functional as F
+from torchvision import transforms
 import IPython
 e = IPython.embed
 
@@ -64,6 +65,8 @@ class ACTDataset(torch.utils.data.Dataset):
             # get observation at start_ts only
             if 'end_observation' in root['observations'].keys():
                 qpos = root['/observations/end_observation'][start_ts]
+            elif 'qpos_obs' in root['observations'].keys():
+                qpos = root['/observations/qpos_obs'][start_ts]
             else:
                 raise Exception("Not supported qpos format yet.")
             
@@ -86,8 +89,10 @@ class ACTDataset(torch.utils.data.Dataset):
 
             if self.cfg['TASK_NAME'] == 'isaac_singlebox':
                 task_instruction = 'red'
-            else:
+            elif self.cfg['TASK_NAME'] in ['isaac_singlebox', 'isaac_singlecolorbox', 'isaac_multicolorbox']:
                 task_instruction = np.array(root['/task_instruction']).item().decode('utf-8')
+            else:
+                task_instruction = 'none'
 
         # new axis for different cameras
         all_cam_images = []
@@ -102,26 +107,30 @@ class ACTDataset(torch.utils.data.Dataset):
         is_pad = torch.from_numpy(is_pad).bool()    # left shape: (chunk_size,)
         image_data = torch.einsum('k h w c -> k c h w', image_data)
 
-        action_data = (action_data - self.norm_stats["action_mean"]) / self.norm_stats["action_std"]
+        action_data = (action_data - self.norm_stats["action_mean"].float()) / self.norm_stats["action_std"].float()
         if 'observations/end_observation_mean' in self.norm_stats.keys():
-            qpos_data = (qpos_data - self.norm_stats['observations/end_observation_mean']) / self.norm_stats['observations/end_observation_std']
-
-        image_data, qpos_data, action_data, is_pad = self.transforms(image_data, qpos_data, action_data, is_pad)
-
+            qpos_data = (qpos_data - self.norm_stats['observations/end_observation_mean'].float()) / self.norm_stats['observations/end_observation_std'].float()
+        elif 'observations/qpos_obs_mean' in self.norm_stats.keys():
+            qpos_data = (qpos_data - self.norm_stats['observations/qpos_obs_mean'].float()) / self.norm_stats['observations/qpos_obs_std'].float()
+        else:
+            raise NotImplementedError
+        
+        image_data = self.transforms(image_data)
+        
         return image_data, qpos_data, action_data, is_pad, task_instruction
     
 class ACTCompose():
     def __init__(self, transforms):
         self.transforms = transforms
 
-    def __call__(self, image_data, qpos_data, action_data, is_pad):
+    def __call__(self, image_data,):
         for t in self.transforms:
-            image_data, qpos_data, action_data, is_pad = t(image_data, qpos_data, action_data, is_pad)
-        return image_data, qpos_data, action_data, is_pad
+            image_data = t(image_data)
+        return image_data
 
 class ACTToTensor():
-    def __call__(self, image_data, qpos_data, action_data, is_pad):
-        return F.to_tensor(image_data), F.to_tensor(qpos_data), F.to_tensor(action_data), F.to_tensor(action_data)
+    def __call__(self, image_data):
+        return F.to_tensor(image_data)
 
 class ACTNormalize():
     def __init__(self, mean, std, to_bgr=False):
@@ -129,21 +138,23 @@ class ACTNormalize():
         self.std = std
         self.to_bgr = to_bgr
 
-    def __call__(self, image_data, qpos_data, action_data, is_pad):
+    def __call__(self, image_data):
         image_data = F.normalize(image_data, mean=self.mean, std=self.std)
 
         if self.to_bgr:
             image_data = image_data[:, [2, 1, 0], :, :]
         
-        return image_data, qpos_data, action_data, is_pad
+        return image_data
     
 def build_ACTTransforms(cfg, is_train=True):
+    resize_transform = transforms.Resize((cfg['DATA']['IMG_RESIZE_SHAPE'][1], cfg['DATA']['IMG_RESIZE_SHAPE'][0]))
     normalize_transform = ACTNormalize(
         mean=cfg['DATA']['IMG_NORM_MEAN'], std=cfg['DATA']['IMG_NORM_STD'], to_bgr=False,
     )
 
     transform = ACTCompose(
         [
+            resize_transform,
             normalize_transform,
         ]
     )

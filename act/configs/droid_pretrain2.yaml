@@ -1,7 +1,6 @@
 __BASE__: "Base.yaml"
 
 TASK_NAME: 'droid_pretrain'
-ONSCREEN_RENDER: True
 SEED: 1
 
 POLICY:

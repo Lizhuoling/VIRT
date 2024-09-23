@@ -124,8 +124,8 @@ def run_gpt_api(app_infos,
 if __name__ == "__main__":
 
     response, response_info = run_gpt_api(app_infos=app_infos, 
-                user_prompt="This strategy is to mimic the effect of human gaze in guiding future actions and concentrating a small and important region",
-                system_prompt="Please help me express the following content in a more professional and academic tone",
+                user_prompt="Due to the multi-modal nature of trajectories, robotic manipulation is highly ambiguous and often requires instructions to specify the task content. In this work, we highlight that vision instruction, compared with text instruction, is more suitable for use as it describes manipulation details more clearly and is easier to understand by policies. Following this insight and also borrowing inspirations from cognitive science, we propose the robotic imagery paradigm that supports pre-training on large-scale robotic data without any human annotation. In addition, mimicking the mechanism of human eye gaze, we devise a robotic gaze strategy that guides subsequent actions and concentrates the attention of the policy on the manipulated object. Based on these two proposed techniques, a fully Transformer-based policy named VIRT is developed. We design extensive tasks using both a real robot and simulation environments to validate the effectiveness of VIRT. The results indicate that VIRT can complete very competitive tasks like ``opening the lid of a tightly sealed bottle'', and the proposed techniques boost the success rates of the baseline policy on some challenging tasks from 0\% to more than 70\%.",
+                system_prompt="You are an expert in academic paper writting. Please help me express the following content in a more professional, concise, and academic tone.",
                 gpt_model="OPENAI_GPT_4_O_PREVIEW",
                 image_path=None)
 

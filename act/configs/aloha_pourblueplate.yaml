@@ -6,7 +6,7 @@ POLICY:
   POLICY_NAME: "AlohaGripper_ACT"
   BACKBONE: "dinov2_s"
   BACKBONE_PATH: "./pretrained/dinov2_vits14_pretrain.pth"
-  CHUNK_SIZE: 20
+  CHUNK_SIZE: 5
   STATE_DIM: 14
   ENC_LAYERS: 0
   DEC_LAYERS: 3
@@ -21,12 +21,12 @@ POLICY:
   GRID_MASK: True
 
 TRAIN:
-  NUM_ITERATIONS: 100000
+  NUM_ITERATIONS: 10000
   LOG_INTERVAL: 100
   SAVE_CHECKPOINT_INTERVAL: 1000
   BATCH_SIZE: 18
   LR: 0.00001
-  LR_BACKBONE: 0.000001
+  LR_BACKBONE: 0.00001
   DECAY_LR_ITER_STEPS: []
   DATA_SAMPLE_MODE: 'random'
 
@@ -34,7 +34,7 @@ EVAL:
   DATA_EVAL_RATIO: 0.0
   INFERENCE_MAX_STEPS: 2000
   VALID_CHUNK: 5
-  CHUNK_SMOOTH: -1
+  LIMIT_MAX_MOVE: True
 
 DATA:
   CAMERA_NAMES: ['cam_high', 'cam_left_wrist', 'cam_right_wrist']
@@ -42,8 +42,8 @@ DATA:
   ROI_RESIZE_SHAPE: [322, 238]
   INPUT_KEYS: ['observations/effort_obs', 'observations/qpos_obs', 'observations/qvel_obs', 'past_action']
   NORM_KEYS: ['action', 'observations/effort_obs', 'observations/qpos_obs', 'observations/qvel_obs']
-  PAST_OBSERVATION_LEN: 20
-  OBSERVATION_SAMPLE_INTERVAL: 10
-  PAST_ACTION_LEN: 5
+  PAST_OBSERVATION_LEN: 1
+  OBSERVATION_SAMPLE_INTERVAL: 1
+  PAST_ACTION_LEN: 1
   PAST_ACTION_SAMPLE_INTERVAL: 1
   ACTION_SAMPLE_INTERVAL: 4

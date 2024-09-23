@@ -219,12 +219,12 @@ def mlp(input_dim, hidden_dim, output_dim, hidden_depth):
 
 
 def build_encoder(cfg):
-    d_model = cfg['POLICY']['HIDDEN_DIM'] # 256
-    dropout = cfg['POLICY']['DROPOUT'] # 0.1
-    nhead = cfg['POLICY']['NHEADS'] # 8
-    dim_feedforward = cfg['POLICY']['DIM_FEEDFORWARD'] # 2048
-    num_encoder_layers = cfg['POLICY']['ENC_LAYERS'] # 4 # TODO shared with VAE decoder
-    normalize_before = False # False
+    d_model = cfg['POLICY']['HIDDEN_DIM']
+    dropout = cfg['POLICY']['DROPOUT']
+    nhead = cfg['POLICY']['NHEADS']
+    dim_feedforward = cfg['POLICY']['DIM_FEEDFORWARD']
+    num_encoder_layers = cfg['POLICY']['ENC_LAYERS']
+    normalize_before = False
     activation = "relu"
 
     encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward,

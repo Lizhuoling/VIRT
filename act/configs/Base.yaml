@@ -6,13 +6,11 @@ IS_EVAL: False
 IS_DEBUG: False
 CKPT_DIR: "./outputs/debug"
 DATASET_DIR: "./data/sim_transfer_cube_scripted"
-ONSCREEN_RENDER: False
 
 POLICY:
   POLICY_NAME: "ACT"
   BACKBONE: "resnet18"
   BACKBONE_PATH: "./pretrained/dinov2_vits14_pretrain.pth"
-  USE_VAE: False
   KL_WEIGHT: 10
   CHUNK_SIZE: 100
   HIDDEN_DIM: 512
@@ -23,8 +21,8 @@ POLICY:
   POSITION_EMBEDDING: 'sine'
   DROPOUT: 0.1
   NHEADS: 8
-  ENC_LAYERS: 4
-  DEC_LAYERS: 7
+  ENC_LAYERS: 1
+  DEC_LAYERS: 1
   OUTPUT_MODE: 'absolute'
   USE_UNCERTAINTY: False
   UNCERTAINTY_RANGE: [-10, 10]

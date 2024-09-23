@@ -1,7 +1,6 @@
 __BASE__: "Base.yaml"
 
 TASK_NAME: 'aloha_pourblueplate'
-ONSCREEN_RENDER: True
 
 POLICY:
   POLICY_NAME: "ACT"
@@ -14,6 +13,7 @@ POLICY:
   UNCERTAINTY_RANGE: [-10, 10]
   USE_CLIP: False
   CLIP_PATH: "./pretrained/CLIP_ckpts"
+  KL_WEIGHT: 50
 
 TRAIN:
   NUM_ITERATIONS: 10000
@@ -27,15 +27,14 @@ TRAIN:
 
 EVAL:
   DATA_EVAL_RATIO: 0.0
-  INFERENCE_MAX_STEPS: 2500
   INFERENCE_MAX_STEPS: 2000
   VALID_CHUNK: 5
   LIMIT_MAX_MOVE: True
 
 DATA:
   CAMERA_NAMES: ['cam_high', 'cam_left_wrist', 'cam_right_wrist']
-  IMG_RESIZE_SHAPE: [322, 238]
-  ROI_RESIZE_SHAPE: [322, 238]
+  IMG_RESIZE_SHAPE: [320, 240]
+  ROI_RESIZE_SHAPE: [320, 240]
   INPUT_KEYS: ['task_instruction', 'observations/qpos_obs',]
   NORM_KEYS: ['action', 'observations/qpos_obs',]
   PAST_OBSERVATION_LEN: 1

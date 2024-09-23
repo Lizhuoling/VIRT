@@ -1,7 +1,6 @@
 __BASE__: "Base.yaml"
 
 TASK_NAME: 'isaac_fiveboxred'
-ONSCREEN_RENDER: True
 
 POLICY:
   POLICY_NAME: "IsaacGripper_ACT"
@@ -11,7 +10,6 @@ POLICY:
   DEC_LAYERS: 3
   USE_UNCERTAINTY: False
   UNCERTAINTY_RANGE: [-10, 10]
-  USE_VAE: False
   USE_CLIP: True
   KL_WEIGHT: 50
   CLIP_PATH: "/home/cvte/twilight/home/data/ckpts/CLIP_ckpts"

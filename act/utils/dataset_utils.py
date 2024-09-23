@@ -86,7 +86,7 @@ def load_data(cfg):
         train_indices = shuffled_indices
     
     # construct dataset and dataloader
-    if cfg['POLICY']['POLICY_NAME'] == 'ACT':
+    if cfg['POLICY']['POLICY_NAME'] in ['ACT', 'CNNMLP', 'Diffusion']:
         train_transforms = build_ACTTransforms(cfg, is_train = True)
         train_dataset = ACTDataset(cfg, transforms = train_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = train_indices, is_train = True)
         if data_eval_ratio > 0:

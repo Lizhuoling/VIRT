@@ -309,8 +309,8 @@ def collect_data_main(task_name, save_data_path = ""):
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    task_name = 'isaac_multicolorbox'
-    save_data_path = '/home/cvte/twilight/data/isaac_multicolorbox'
+    task_name = 'isaac_singlebox'
+    save_data_path = '/home/cvte/twilight/data/isaac_singlebox'
 
     leap_mode = 'right'
     leap_conf_thre = 0.3

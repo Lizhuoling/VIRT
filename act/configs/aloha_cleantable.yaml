@@ -6,7 +6,7 @@ POLICY:
   POLICY_NAME: "AlohaGripper_ACT"
   BACKBONE: "dinov2_s"
   BACKBONE_PATH: "./pretrained/dinov2_vits14_pretrain.pth"
-  CHUNK_SIZE: 20
+  CHUNK_SIZE: 5
   STATE_DIM: 14
   ENC_LAYERS: 0
   DEC_LAYERS: 3

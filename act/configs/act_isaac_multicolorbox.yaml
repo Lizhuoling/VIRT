@@ -1,7 +1,6 @@
 __BASE__: "Base.yaml"
 
-TASK_NAME: 'isaac_singlebox'
-ONSCREEN_RENDER: True
+TASK_NAME: 'isaac_multicolorbox'
 
 POLICY:
   POLICY_NAME: "ACT"
@@ -14,12 +13,13 @@ POLICY:
   UNCERTAINTY_RANGE: [-10, 10]
   USE_CLIP: True
   CLIP_PATH: "./pretrained/CLIP_ckpts"
+  KL_WEIGHT: 50
 
 TRAIN:
   NUM_ITERATIONS: 12000
   LOG_INTERVAL: 100
   SAVE_CHECKPOINT_INTERVAL: 1000
-  BATCH_SIZE: 64
+  BATCH_SIZE: 32
   LR: 0.00001
   LR_BACKBONE: 0.00001
   DECAY_LR_ITER_STEPS: []
@@ -34,8 +34,7 @@ EVAL:
 
 DATA:
   CAMERA_NAMES: ['exterior_camera1', 'exterior_camera2', 'wrist_camera']
-  IMG_RESIZE_SHAPE: [154, 112]
-  ROI_RESIZE_SHAPE: [154, 112]
+  IMG_RESIZE_SHAPE: [320, 240]
   INPUT_KEYS: ['task_instruction', 'observations/end_observation']
   NORM_KEYS: ['action', 'observations/end_observation',]
   PAST_OBSERVATION_LEN: 1

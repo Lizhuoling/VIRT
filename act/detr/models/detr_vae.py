@@ -62,9 +62,13 @@ class DETRVAE(nn.Module):
         self.latent_dim = 32 # final size of latent z # TODO tune
         self.cls_embed = nn.Embedding(1, hidden_dim) # extra cls token embedding
         self.encoder_action_proj = nn.Linear(state_dim, hidden_dim) # project action to embedding
-        if 'observations/end_observation' in  self.cfg['DATA']['INPUT_KEYS']:
+        
+        if 'observations/end_observation' in self.cfg['DATA']['INPUT_KEYS']:
             self.encoder_joint_proj = nn.Linear(13, hidden_dim)  # project qpos to embedding
             self.input_proj_robot_state = nn.Linear(13, hidden_dim)
+        elif 'observations/qpos_obs' in self.cfg['DATA']['INPUT_KEYS']:
+            self.encoder_joint_proj = nn.Linear(14, hidden_dim)  # project qpos to embedding
+            self.input_proj_robot_state = nn.Linear(14, hidden_dim)
         else:
             raise Exception('Not supported joint projection')
         self.latent_proj = nn.Linear(hidden_dim, self.latent_dim*2) # project hidden state to latent std, var
@@ -87,7 +91,7 @@ class DETRVAE(nn.Module):
         """
         
         is_training = actions is not None # train or val
-        bs, _ = qpos.shape
+        bs = image.shape[0]
         ### Obtain latent z from action sequence
         if is_training:
             # project action sequence to embedding dim, and concat with a CLS token
@@ -115,7 +119,7 @@ class DETRVAE(nn.Module):
         else:
             mu = logvar = None
             latent_sample = torch.zeros([bs, self.latent_dim], dtype=torch.float32).to(qpos.device)
-            latent_input = self.latent_out_proj(latent_sample)
+            latent_input = self.latent_out_proj(latent_sample)  # Left shape: (B, C)
 
         # Image observation features and position embeddings
         all_cam_features = []
@@ -153,10 +157,8 @@ class DETRVAE(nn.Module):
         is_pad_hat = self.is_pad_head(hs)
         return a_hat, is_pad_hat, [mu, logvar]
 
-
-
 class CNNMLP(nn.Module):
-    def __init__(self, backbones, state_dim, camera_names):
+    def __init__(self, backbones, state_dim, camera_names, cfg):
         """ Initializes the model.
         Parameters:
             backbones: torch module of the backbone to be used. See backbone.py
@@ -167,26 +169,25 @@ class CNNMLP(nn.Module):
             aux_loss: True if auxiliary decoding losses (loss at each decoder layer) are to be used.
         """
         super().__init__()
+        self.cfg = cfg
         self.camera_names = camera_names
-        self.action_head = nn.Linear(1000, state_dim) # TODO add more
-        if backbones is not None:
-            self.backbones = nn.ModuleList(backbones)
-            backbone_down_projs = []
-            for backbone in backbones:
-                down_proj = nn.Sequential(
-                    nn.Conv2d(backbone.num_channels, 128, kernel_size=5),
-                    nn.Conv2d(128, 64, kernel_size=5),
-                    nn.Conv2d(64, 32, kernel_size=5)
-                )
-                backbone_down_projs.append(down_proj)
-            self.backbone_down_projs = nn.ModuleList(backbone_down_projs)
+        self.state_dim = state_dim
+        self.chunk_size = self.cfg['POLICY']['CHUNK_SIZE']
+        self.action_head = nn.Linear(2317, self.chunk_size * state_dim)
 
-            mlp_in_dim = 768 * len(backbones) + 14
-            self.mlp = mlp(input_dim=mlp_in_dim, hidden_dim=1024, output_dim=14, hidden_depth=2)
-        else:
-            raise NotImplementedError
+        self.backbones = nn.ModuleList(backbones)
+        self.backbone_down_proj = nn.Sequential(
+                nn.Conv2d(self.backbones[0].num_channels, 128, kernel_size=5),
+                nn.Conv2d(128, 64, kernel_size=5),
+                nn.Conv2d(64, 32, kernel_size=5)
+            )
 
-    def forward(self, qpos, image, env_state, actions=None):
+        if self.cfg["POLICY"]["USE_CLIP"]:
+            self.clip_text_model = CLIPTextModelWithProjection.from_pretrained(cfg["POLICY"]["CLIP_PATH"])
+            self.clip_tokenizer = AutoTokenizer.from_pretrained(cfg["POLICY"]["CLIP_PATH"])
+            self.clip_mlp = nn.Linear(512, 1)
+
+    def forward(self, qpos, image, task_instruction, actions=None):
         """
         qpos: batch, qpos_dim
         image: batch, num_cam, channel, height, width
@@ -198,17 +199,26 @@ class CNNMLP(nn.Module):
         # Image observation features and position embeddings
         all_cam_features = []
         for cam_id, cam_name in enumerate(self.camera_names):
-            features, pos = self.backbones[cam_id](image[:, cam_id])
+            features, pos = self.backbones[0](image[:, cam_id])
             features = features[0] # take the last layer feature
-            pos = pos[0] # not used
-            all_cam_features.append(self.backbone_down_projs[cam_id](features))
+            all_cam_features.append(self.backbone_down_proj(features))
         # flatten everything
         flattened_features = []
         for cam_feature in all_cam_features:
             flattened_features.append(cam_feature.reshape([bs, -1]))
+        
         flattened_features = torch.cat(flattened_features, axis=1) # 768 each
         features = torch.cat([flattened_features, qpos], axis=1) # qpos: 14
-        a_hat = self.mlp(features)
+
+        if self.cfg["POLICY"]["USE_CLIP"]:
+            text_tokens = self.clip_tokenizer(task_instruction, padding=True, return_tensors="pt").to(image.device)
+            task_instruction_emb = self.clip_text_model(**text_tokens).text_embeds.detach()  # Left shape: (bs, clip_text_len)
+            instruction_bias = self.clip_mlp(task_instruction_emb)
+            features = features + instruction_bias
+        
+        a_hat = self.action_head(features)
+        a_hat = a_hat.reshape(bs, self.chunk_size, self.state_dim)
+        
         return a_hat
 
 
@@ -242,9 +252,6 @@ def build_encoder(cfg):
 
 
 def get_ACT_model(cfg):
-    # From state
-    # backbone = None # from state for now, no need for conv nets
-    # From image
     backbones = []
     backbone = build_backbone(cfg)
     backbones.append(backbone)
@@ -258,6 +265,23 @@ def get_ACT_model(cfg):
         encoder,
         state_dim=cfg['POLICY']['STATE_DIM'],
         chunk_size=cfg['POLICY']['CHUNK_SIZE'],
+        camera_names=cfg['DATA']['CAMERA_NAMES'],
+        cfg = cfg,
+    )
+
+    n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print("number of parameters: %.2fM" % (n_parameters/1e6,))
+
+    return model
+
+def get_CNNMLP_model(cfg):
+    backbones = []
+    backbone = build_backbone(cfg)
+    backbones.append(backbone)
+
+    model = CNNMLP(
+        backbones,
+        state_dim=cfg['POLICY']['STATE_DIM'],
         camera_names=cfg['DATA']['CAMERA_NAMES'],
         cfg = cfg,
     )
