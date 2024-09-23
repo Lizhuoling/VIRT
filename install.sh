@@ -28,7 +28,12 @@ cd ..
 
 python setup.py develop
 
-# git clone https://gitee.com/twilightLZL/CLIP.git
-# cd CLIP
-# python setup.py develop
-# cd ..
+git clone https://gitee.com/twilightLZL/CLIP.git
+cd CLIP
+python setup.py develop
+cd ..
+
+git clone -b r2d2 https://gitee.com/pennyyoung/robomimic.git
+cd robomimic
+pip install -e .
+cd ..
