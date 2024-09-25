@@ -1,5 +1,5 @@
-exp_id=baseline_multicolorbox_gaze
-config_name=baseline_multicolorbox_gaze
+exp_id=isaac_singlecolorbox
+config_name=isaac_singlecolorbox
 
 nnodes=1
 nproc_per_node=1

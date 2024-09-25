@@ -121,7 +121,7 @@ class AlohaManipulationTestEnviManager():
                                         observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = None, status = status)  # Left shape: (1, T, 9)
                     elif self.cfg['POLICY']['POLICY_NAME'] == 'ACT':
                         qpos_obs = qpos_obs[:, -1]    # Select the lastest qpos
-                        norm_actions_pred, _ = self.policy(qpos = qpos_obs, image = image, actions = None, is_pad = None, task_instruction = None)
+                        norm_actions_pred, status_pred = self.policy(qpos = qpos_obs, image = image, actions = None, is_pad = None, task_instruction = None)
                     action_mean, action_std = self.stats['action_mean'][None, None].to(image.device), self.stats['action_std'][None, None].to(image.device) # Left shape: (1, 1, action_dim), (1, 1, action_dim)
                     actions_pred = norm_actions_pred * action_std + action_mean
 
@@ -217,9 +217,19 @@ class AlohaManipulationTestEnviManager():
             left_effort, left_qpos, left_qvel = puppet_arm_left.effort, puppet_arm_left.position, puppet_arm_left.velocity
             right_effort, right_qpos, right_qvel = puppet_arm_right.effort, puppet_arm_right.position, puppet_arm_right.velocity
             effort, qpos, qvel = torch.Tensor(left_effort + right_effort).cuda(), torch.Tensor(left_qpos + right_qpos).cuda(), torch.Tensor(left_qvel + right_qvel).cuda()
-            norm_effort = ((effort - self.stats['observations/effort_obs_mean'].cuda()) / self.stats['observations/effort_obs_std'].cuda())[None]   # Left shape: (1, joint_dim)
-            norm_qpos = ((qpos - self.stats['observations/qpos_obs_mean'].cuda()) / self.stats['observations/qpos_obs_std'].cuda())[None]   # Left shape: (1, joint_dim)
-            norm_qvel = ((qvel - self.stats['observations/qvel_obs_mean'].cuda()) / self.stats['observations/qvel_obs_std'].cuda())[None]   # Left shape: (1, joint_dim)
+            
+            if 'observations/effort_obs' in self.cfg['DATA']['INPUT_KEYS']:
+                norm_effort = ((effort - self.stats['observations/effort_obs_mean'].cuda().float()) / self.stats['observations/effort_obs_std'].cuda().float())[None]   # Left shape: (1, joint_dim)
+            else:
+                norm_effort = None
+            if 'observations/qpos_obs' in self.cfg['DATA']['INPUT_KEYS']:
+                norm_qpos = ((qpos - self.stats['observations/qpos_obs_mean'].cuda().float()) / self.stats['observations/qpos_obs_std'].cuda().float())[None]   # Left shape: (1, joint_dim)
+            else:
+                norm_qpos = None
+            if 'observations/qvel_obs' in self.cfg['DATA']['INPUT_KEYS']:
+                norm_qvel = ((qvel - self.stats['observations/qvel_obs_mean'].cuda().float()) / self.stats['observations/qvel_obs_std'].cuda().float())[None]   # Left shape: (1, joint_dim)
+            else:
+                norm_qvel = None
             
             img_dict = dict(
                 cam_high = torch.from_numpy(img_front.copy()).float().cuda().permute(2, 0, 1),
@@ -238,44 +248,69 @@ class AlohaManipulationTestEnviManager():
             return norm_effort, norm_qpos, norm_qvel, imgs, qpos
         
     def prepare_policy_input(self, effort_obs_list, qpos_obs_list, qvel_obs_list, action_list, imgs, cur_status):
-        effort_obs = torch.stack(effort_obs_list, dim = 1) # Left shape: (1, T, 14)
-        qpos_obs = torch.stack(qpos_obs_list, dim = 1) # Left shape: (1, T, 14)
-        qvel_obs = torch.stack(qvel_obs_list, dim = 1) # Left shape: (1, T, 14)
-        past_action = torch.stack(action_list, dim = 1) # Left shape: (1, T, 14)
+        effort_flag, qpos_flag, qvel_flag = effort_obs_list[0] != None, qpos_obs_list[0] != None, qvel_obs_list[0] != None
+        if effort_flag: effort_obs = torch.stack(effort_obs_list, dim = 1) # Left shape: (1, T, 14)
+        if qpos_flag: qpos_obs = torch.stack(qpos_obs_list, dim = 1) # Left shape: (1, T, 14)
+        if qvel_flag:  qvel_obs = torch.stack(qvel_obs_list, dim = 1) # Left shape: (1, T, 14)
 
         past_obs_len, obs_sample_interval = self.cfg['DATA']['PAST_OBSERVATION_LEN'], self.cfg['DATA']['OBSERVATION_SAMPLE_INTERVAL']
-        if effort_obs.shape[1] >= (past_obs_len - 1) * obs_sample_interval + 1:
-            effort_obs = effort_obs[:, effort_obs.shape[1] - (past_obs_len - 1) * obs_sample_interval - 1 : effort_obs.shape[1] : obs_sample_interval]   # Left shape: (1, past_obs_len, 14)
-            qpos_obs = qpos_obs[:, qpos_obs.shape[1] - (past_obs_len - 1) * obs_sample_interval -1 : qpos_obs.shape[1] : obs_sample_interval]   # Left shape: (1, past_obs_len, 14)
-            qvel_obs = qvel_obs[:, qvel_obs.shape[1] - (past_obs_len - 1) * obs_sample_interval -1 : qvel_obs.shape[1] : obs_sample_interval]   # Left shape: (1, past_obs_len, 14)
-            observation_is_pad = torch.zeros((effort_obs.shape[0], effort_obs.shape[1]), dtype = torch.bool).to(effort_obs.device)  # Left shape: (1, past_obs_len)
+        if qpos_obs.shape[1] >= (past_obs_len - 1) * obs_sample_interval + 1:
+            if effort_flag: 
+                effort_obs = effort_obs[:, effort_obs.shape[1] - (past_obs_len - 1) * obs_sample_interval - 1 : effort_obs.shape[1] : obs_sample_interval]   # Left shape: (1, past_obs_len, 14)
+            else:
+                effort_obs = None
+            if qpos_flag: 
+                qpos_obs = qpos_obs[:, qpos_obs.shape[1] - (past_obs_len - 1) * obs_sample_interval -1 : qpos_obs.shape[1] : obs_sample_interval]   # Left shape: (1, past_obs_len, 14)
+            else:
+                qpos_obs = None
+            if qvel_flag: 
+                qvel_obs = qvel_obs[:, qvel_obs.shape[1] - (past_obs_len - 1) * obs_sample_interval -1 : qvel_obs.shape[1] : obs_sample_interval]   # Left shape: (1, past_obs_len, 14)
+            else:
+                qvel_obs = None
+            observation_is_pad = torch.zeros((qpos_obs.shape[0], qpos_obs.shape[1]), dtype = torch.bool).to(qpos_obs.device)  # Left shape: (1, past_obs_len)
         else:
             valid_past_num = (effort_obs.shape[1] - 1) // obs_sample_interval
             st = (effort_obs.shape[1] - 1) - valid_past_num * obs_sample_interval
-            effort_obs = effort_obs[:, st : effort_obs.shape[1] : obs_sample_interval]   # Left shape: (1, past_obs_len, 14)
-            qpos_obs = qpos_obs[:, st : qpos_obs.shape[1] : obs_sample_interval]   # Left shape: (1, past_obs_len, 14)
-            qvel_obs = qvel_obs[:, st : qvel_obs.shape[1] : obs_sample_interval]   # Left shape: (1, past_obs_len, 14)
-            observation_is_pad = torch.zeros((effort_obs.shape[0], effort_obs.shape[1]), dtype = torch.bool).to(effort_obs.device)
-            observation_is_pad = torch.cat((torch.ones((effort_obs.shape[0], past_obs_len - effort_obs.shape[1]), dtype = torch.bool).to(effort_obs.device), observation_is_pad), dim = 1)
-            pad_effort_obs = torch.zeros((effort_obs.shape[0], past_obs_len - effort_obs.shape[1], effort_obs.shape[2]), dtype = torch.float32).to(effort_obs.device)
-            effort_obs = torch.cat((pad_effort_obs, effort_obs), dim = 1)
-            pad_qpos_obs = torch.zeros((qpos_obs.shape[0], past_obs_len - qpos_obs.shape[1], qpos_obs.shape[2]), dtype = torch.float32).to(effort_obs.device)
-            qpos_obs = torch.cat((pad_qpos_obs, qpos_obs), dim = 1)
-            pad_qvel_obs = torch.zeros((qvel_obs.shape[0], past_obs_len - qvel_obs.shape[1], qvel_obs.shape[2]), dtype = torch.float32).to(effort_obs.device)
-            qvel_obs = torch.cat((pad_qvel_obs, qvel_obs), dim = 1)
+            if effort_flag: 
+                effort_obs = effort_obs[:, st : effort_obs.shape[1] : obs_sample_interval]   # Left shape: (1, past_obs_len, 14)
+            else:
+                effort_obs = None
+            if qpos_flag: 
+                qpos_obs = qpos_obs[:, st : qpos_obs.shape[1] : obs_sample_interval]   # Left shape: (1, past_obs_len, 14)
+            else:
+                qpos_obs = None
+            if qvel_flag: 
+                qvel_obs = qvel_obs[:, st : qvel_obs.shape[1] : obs_sample_interval]   # Left shape: (1, past_obs_len, 14)
+            else:
+                qvel_obs = None
+            observation_is_pad = torch.zeros((qpos_obs.shape[0], effort_obs.shape[1]), dtype = torch.bool).to(qpos_obs.device)
+            observation_is_pad = torch.cat((torch.ones((qpos_obs.shape[0], past_obs_len - qpos_obs.shape[1]), dtype = torch.bool).to(qpos_obs.device), observation_is_pad), dim = 1)
+            if effort_flag:
+                pad_effort_obs = torch.zeros((effort_obs.shape[0], past_obs_len - effort_obs.shape[1], effort_obs.shape[2]), dtype = torch.float32).to(effort_obs.device)
+                effort_obs = torch.cat((pad_effort_obs, effort_obs), dim = 1)
+            if qpos_flag:
+                pad_qpos_obs = torch.zeros((qpos_obs.shape[0], past_obs_len - qpos_obs.shape[1], qpos_obs.shape[2]), dtype = torch.float32).to(effort_obs.device)
+                qpos_obs = torch.cat((pad_qpos_obs, qpos_obs), dim = 1)
+            if qvel_flag:
+                pad_qvel_obs = torch.zeros((qvel_obs.shape[0], past_obs_len - qvel_obs.shape[1], qvel_obs.shape[2]), dtype = torch.float32).to(effort_obs.device)
+                qvel_obs = torch.cat((pad_qvel_obs, qvel_obs), dim = 1)
 
-        past_action_len, past_action_interval = self.cfg['DATA']['PAST_ACTION_LEN'], self.cfg['DATA']['PAST_ACTION_SAMPLE_INTERVAL']
-        if past_action.shape[1] >= (past_action_len - 1) * past_action_interval + 1:
-            past_action = past_action[:, past_action.shape[1] - (past_action_len - 1) * past_action_interval - 1: past_action.shape[1] : past_action_interval]
-            past_action_is_pad = torch.zeros((past_action.shape[0], past_action.shape[1]), dtype = torch.bool).to(past_action.device)  # Left shape: (1, T, 14)
+        if 'past_action' in self.cfg['DATA']['INPUT_KEYS']:
+            past_action = torch.stack(action_list, dim = 1) # Left shape: (1, T, 14)
+            past_action_len, past_action_interval = self.cfg['DATA']['PAST_ACTION_LEN'], self.cfg['DATA']['PAST_ACTION_SAMPLE_INTERVAL']
+            if past_action.shape[1] >= (past_action_len - 1) * past_action_interval + 1:
+                past_action = past_action[:, past_action.shape[1] - (past_action_len - 1) * past_action_interval - 1: past_action.shape[1] : past_action_interval]
+                past_action_is_pad = torch.zeros((past_action.shape[0], past_action.shape[1]), dtype = torch.bool).to(past_action.device)  # Left shape: (1, T, 14)
+            else:
+                valid_past_num = (past_action.shape[1] - 1) // past_action_interval
+                st = (past_action.shape[1] - 1) - valid_past_num * past_action_interval
+                past_action = past_action[:, st : past_action.shape[1] : past_action_interval]   # Left shape: (1, past_action_len, 14)
+                past_action_is_pad = torch.zeros((past_action.shape[0], past_action.shape[1]), dtype = torch.bool).to(past_action.device)
+                past_action_is_pad = torch.cat((torch.ones((past_action.shape[0], past_action_len - past_action.shape[1]), dtype = torch.bool).to(past_action.device), past_action_is_pad), dim = 1)
+                pad_past_action = torch.zeros((past_action.shape[0], past_action_len - past_action.shape[1], past_action.shape[2]), dtype = torch.float32).to(past_action.device)
+                past_action = torch.cat((pad_past_action, past_action), dim = 1)
         else:
-            valid_past_num = (past_action.shape[1] - 1) // past_action_interval
-            st = (past_action.shape[1] - 1) - valid_past_num * past_action_interval
-            past_action = past_action[:, st : past_action.shape[1] : past_action_interval]   # Left shape: (1, past_action_len, 14)
-            past_action_is_pad = torch.zeros((past_action.shape[0], past_action.shape[1]), dtype = torch.bool).to(past_action.device)
-            past_action_is_pad = torch.cat((torch.ones((past_action.shape[0], past_action_len - past_action.shape[1]), dtype = torch.bool).to(past_action.device), past_action_is_pad), dim = 1)
-            pad_past_action = torch.zeros((past_action.shape[0], past_action_len - past_action.shape[1], past_action.shape[2]), dtype = torch.float32).to(past_action.device)
-            past_action = torch.cat((pad_past_action, past_action), dim = 1)
+            past_action, past_action_is_pad = None, None
         
         return imgs, past_action, effort_obs, qpos_obs, qvel_obs, observation_is_pad, past_action_is_pad, cur_status
     

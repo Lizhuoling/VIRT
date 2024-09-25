@@ -65,6 +65,7 @@ class IsaacManipulationTestEnviManager():
                                 action_list.append(torch.cat((norm_end_observation[:, 0:7], norm_joint_observation[:, 7:9]), dim = 1)) # Initialize the first element with joint observation
                         all_cam_images, past_action, end_obs, joint_obs, past_action_is_pad, observation_is_pad, task_instruction, status_pred = self.prepare_policy_input(enb_obs_list, \
                                                                                 joint_obs_list, action_list, all_cam_images, isaac_envi.task_instruction, cur_status)
+                        
                         if self.cfg['POLICY']['POLICY_NAME'] == 'IsaacGripper_ACT':
                             norm_actions_pred, status_pred = self.policy(image = all_cam_images, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, observation_is_pad = observation_is_pad, \
                                         past_action_is_pad = past_action_is_pad, task_instruction_list = task_instruction, status = status_pred)  # Left shape: (num_env, T, 9)
@@ -73,6 +74,7 @@ class IsaacManipulationTestEnviManager():
                             norm_actions_pred, _ = self.policy(qpos = end_obs, image = all_cam_images, actions = None, is_pad = None, task_instruction = task_instruction)
                         else:
                             raise NotImplementedError
+
                         action_mean, action_std = self.stats['action_mean'][None, None].to(all_cam_images.device), self.stats['action_std'][None, None].to(all_cam_images.device)
                         actions_pred = norm_actions_pred * action_std + action_mean
                         execution_step = 0

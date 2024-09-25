@@ -1,5 +1,5 @@
-exp_id=diffusion_isaac_singlebox
-config_name=diffusion_isaac_singlebox
+exp_id=isaac_singlecolorbox
+config_name=isaac_singlecolorbox
 
 nnodes=1
 nproc_per_node=1
@@ -11,7 +11,7 @@ CUDA_VISIBLE_DEVICES=1 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_nod
     main.py \
     --config_name $config_name \
     --save_dir ./outputs/$exp_id \
-    --data_dir datasets/isaac_singlebox \
+    --data_dir datasets/isaac_singlecolorbox \
     --num_nodes $nnodes \
     #--debug \
     #--load_pretrain outputs/pretrained_weight/droid_pretrain_dec_114k.ckpt \
