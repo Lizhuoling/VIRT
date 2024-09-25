@@ -40,28 +40,28 @@ class SingleColorFilter():
         bs, num_cam, ch, img_h, img_w = img.shape
         num_color = 1
 
-        denorm_img = img * self.norm_std + self.norm_mean # Left shape: (bs, num_cam, 3, img_h, img_w). Range: 0~1
-        denorm_img = denorm_img[:, :, None, :, :, :] # Left shape: (bs, num_cam, 1, 3, img_h, img_w)
+        denorm_img = img * self.norm_std + self.norm_mean 
+        denorm_img = denorm_img[:, :, None, :, :, :] 
 
         color_thre = []
         for ele in task_instruction:
             color_thre.append(self.filter_cfg[ele])
-        color_thre = torch.stack(color_thre, dim = 0)   # Left shape: (bs, 2, 3)
-        color_thre_min = color_thre[:, 0][:, None, None, :, None, None] # Left shape: (bs, 1, 1, 3, 1, 1)
-        color_thre_max = color_thre[:, 1][:, None, None, :, None, None] # Left shape: (bs, 1, 1, 3, 1, 1)
+        color_thre = torch.stack(color_thre, dim = 0)   
+        color_thre_min = color_thre[:, 0][:, None, None, :, None, None] 
+        color_thre_max = color_thre[:, 1][:, None, None, :, None, None] 
 
-        obj_mask = (denorm_img >= color_thre_min) & (denorm_img <= color_thre_max) # Left shape: (bs, num_cam, num_color, 3, img_h, img_w)
-        obj_mask = obj_mask.view(bs * num_cam * num_color, ch, img_h, img_w) # Left shape: (bs * num_cam * num_color, 3, img_h, img_w)
-        obj_mask = torch.all(obj_mask, dim = 1) # Left shape: (bs * num_cam * num_color, img_h, img_w)
+        obj_mask = (denorm_img >= color_thre_min) & (denorm_img <= color_thre_max) 
+        obj_mask = obj_mask.view(bs * num_cam * num_color, ch, img_h, img_w) 
+        obj_mask = torch.all(obj_mask, dim = 1) 
 
-        det_box = masks_to_boxes(obj_mask)  # Left shape: (bs * num_cam * num_color, 4)
-        rescale_det_box = rescale_box(det_box, (img.shape[4], img.shape[3]), scale_ratio = self.cfg['POLICY']['EXTERNAL_DET_SCALE_FACTOR']) # Left shape: (bs * num_cam * num_color, 4)
-        idxs = torch.arange(bs * num_cam).to(rescale_det_box.device)[:, None, None].expand(-1, num_color, -1).reshape(bs * num_cam * num_color, 1)   # Left shape: (bs * num_cam * num_color, 1)
-        rescale_det_box = torch.cat([idxs, rescale_det_box], dim = 1) # Left shape: (bs * num_cam * num_color, 5)
+        det_box = masks_to_boxes(obj_mask)  
+        rescale_det_box = rescale_box(det_box, (img.shape[4], img.shape[3]), scale_ratio = self.cfg['POLICY']['EXTERNAL_DET_SCALE_FACTOR']) 
+        idxs = torch.arange(bs * num_cam).to(rescale_det_box.device)[:, None, None].expand(-1, num_color, -1).reshape(bs * num_cam * num_color, 1)   
+        rescale_det_box = torch.cat([idxs, rescale_det_box], dim = 1) 
         resize_scale = (self.cfg['DATA']['ROI_RESIZE_SHAPE'][1], self.cfg['DATA']['ROI_RESIZE_SHAPE'][0])
-        view_img = img.view(bs * num_cam, ch, img_h, img_w)   # Left shape: (bs * num_cam, 3, img_h, img_w)
-        sample_img = torchvision.ops.roi_align(input = view_img, boxes = rescale_det_box, output_size = resize_scale)   # Left shape: (bs * num_cam * num_color, ch, img_h, img_w)
-        sample_img = sample_img.view(bs, num_cam, num_color, ch, sample_img.shape[-2], sample_img.shape[-1])    # Left shape: (bs, num_cam, num_color, ch, img_h, img_w)
+        view_img = img.view(bs * num_cam, ch, img_h, img_w)   
+        sample_img = torchvision.ops.roi_align(input = view_img, boxes = rescale_det_box, output_size = resize_scale)   
+        sample_img = sample_img.view(bs, num_cam, num_color, ch, sample_img.shape[-2], sample_img.shape[-1])    
 
         det_box[:, 0] = det_box[:, 0] / img_w
         det_box[:, 1] = det_box[:, 1] / img_h
@@ -97,8 +97,8 @@ class LanguageMultiColorFilter():
         bs, num_cam, ch, img_h, img_w = img.shape
         num_color = 1
 
-        denorm_img = img * self.norm_std + self.norm_mean # Left shape: (bs, num_cam, 3, img_h, img_w). Range: 0~1
-        denorm_img = denorm_img[:, :, None, :, :, :] # Left shape: (bs, num_cam, 1, 3, img_h, img_w)
+        denorm_img = img * self.norm_std + self.norm_mean 
+        denorm_img = denorm_img[:, :, None, :, :, :] 
 
         color_thre = []
         for cnt, ele in enumerate(task_instruction):
@@ -114,22 +114,22 @@ class LanguageMultiColorFilter():
             else:
                 raise Exception("Unsupported status: {}".format(this_status))
             color_thre.append(self.filter_cfg[color])
-        color_thre = torch.stack(color_thre, dim = 0)   # Left shape: (bs, 2, 3)
-        color_thre_min = color_thre[:, 0][:, None, None, :, None, None] # Left shape: (bs, 1, 1, 3, 1, 1)
-        color_thre_max = color_thre[:, 1][:, None, None, :, None, None] # Left shape: (bs, 1, 1, 3, 1, 1)
+        color_thre = torch.stack(color_thre, dim = 0)   
+        color_thre_min = color_thre[:, 0][:, None, None, :, None, None] 
+        color_thre_max = color_thre[:, 1][:, None, None, :, None, None] 
 
-        obj_mask = (denorm_img >= color_thre_min) & (denorm_img <= color_thre_max) # Left shape: (bs, num_cam, num_color, 3, img_h, img_w)
-        obj_mask = obj_mask.view(bs * num_cam * num_color, ch, img_h, img_w) # Left shape: (bs * num_cam * num_color, 3, img_h, img_w)
-        obj_mask = torch.all(obj_mask, dim = 1) # Left shape: (bs * num_cam * num_color, img_h, img_w)
+        obj_mask = (denorm_img >= color_thre_min) & (denorm_img <= color_thre_max) 
+        obj_mask = obj_mask.view(bs * num_cam * num_color, ch, img_h, img_w) 
+        obj_mask = torch.all(obj_mask, dim = 1) 
 
-        det_box = masks_to_boxes(obj_mask)  # Left shape: (bs * num_cam * num_color, 4)
-        rescale_det_box = rescale_box(det_box, (img.shape[4], img.shape[3]), scale_ratio = self.cfg['POLICY']['EXTERNAL_DET_SCALE_FACTOR']) # Left shape: (bs * num_cam * num_color, 4)
-        idxs = torch.arange(bs * num_cam).to(rescale_det_box.device)[:, None, None].expand(-1, num_color, -1).reshape(bs * num_cam * num_color, 1)   # Left shape: (bs * num_cam * num_color, 1)
-        rescale_det_box = torch.cat([idxs, rescale_det_box], dim = 1) # Left shape: (bs * num_cam * num_color, 5)
+        det_box = masks_to_boxes(obj_mask)  
+        rescale_det_box = rescale_box(det_box, (img.shape[4], img.shape[3]), scale_ratio = self.cfg['POLICY']['EXTERNAL_DET_SCALE_FACTOR']) 
+        idxs = torch.arange(bs * num_cam).to(rescale_det_box.device)[:, None, None].expand(-1, num_color, -1).reshape(bs * num_cam * num_color, 1)   
+        rescale_det_box = torch.cat([idxs, rescale_det_box], dim = 1) 
         resize_scale = (self.cfg['DATA']['ROI_RESIZE_SHAPE'][1], self.cfg['DATA']['ROI_RESIZE_SHAPE'][0])
-        view_img = img.view(bs * num_cam, ch, img_h, img_w)   # Left shape: (bs * num_cam, 3, img_h, img_w)
-        sample_img = torchvision.ops.roi_align(input = view_img, boxes = rescale_det_box, output_size = resize_scale)   # Left shape: (bs * num_cam * num_color, ch, img_h, img_w)
-        sample_img = sample_img.view(bs, num_cam, num_color, ch, sample_img.shape[-2], sample_img.shape[-1])    # Left shape: (bs, num_cam, num_color, ch, img_h, img_w)
+        view_img = img.view(bs * num_cam, ch, img_h, img_w)   
+        sample_img = torchvision.ops.roi_align(input = view_img, boxes = rescale_det_box, output_size = resize_scale)   
+        sample_img = sample_img.view(bs, num_cam, num_color, ch, sample_img.shape[-2], sample_img.shape[-1])    
 
         det_box[:, 0] = det_box[:, 0] / img_w
         det_box[:, 1] = det_box[:, 1] / img_h
@@ -163,27 +163,27 @@ class AllColorFilterDetector():
         '''
         bs, num_cam, ch, img_h, img_w = img.shape
         num_color = len(self.filter_cfg)
-        denorm_img = img * self.norm_std + self.norm_mean # Left shape: (bs, num_cam, 3, img_h, img_w). Range: 0~1
-        denorm_img = denorm_img[:, :, None, :, :, :].expand(-1, -1, num_color, -1, -1, -1) # Left shape: (bs, num_cam, num_color, 3, img_h, img_w)
+        denorm_img = img * self.norm_std + self.norm_mean 
+        denorm_img = denorm_img[:, :, None, :, :, :].expand(-1, -1, num_color, -1, -1, -1) 
 
-        color_thre_min = torch.stack([ele[0] for ele in self.filter_cfg.values()], dim = 0) # Left shape: (num_color, 3)
-        color_thre_min = color_thre_min[None, None, :, :, None, None] # Left shape: (1, 1, num_color 3, 1, 1)
-        color_thre_max = torch.stack([ele[1] for ele in self.filter_cfg.values()], dim = 0) # Left shape: (num_color, 3)
-        color_thre_max = color_thre_max[None, None, :, :, None, None] # Left shape: (1, 1, num_color, 3, 1, 1)
+        color_thre_min = torch.stack([ele[0] for ele in self.filter_cfg.values()], dim = 0) 
+        color_thre_min = color_thre_min[None, None, :, :, None, None] 
+        color_thre_max = torch.stack([ele[1] for ele in self.filter_cfg.values()], dim = 0) 
+        color_thre_max = color_thre_max[None, None, :, :, None, None] 
 
-        obj_mask = (denorm_img >= color_thre_min) & (denorm_img <= color_thre_max) # Left shape: (bs, num_cam, num_color, 3, img_h, img_w)
-        obj_mask = obj_mask.view(bs * num_cam * num_color, ch, img_h, img_w) # Left shape: (bs * num_cam * num_color, 3, img_h, img_w)
-        obj_mask = torch.all(obj_mask, dim = 1) # Left shape: (bs * num_cam * num_color, img_h, img_w)
+        obj_mask = (denorm_img >= color_thre_min) & (denorm_img <= color_thre_max) 
+        obj_mask = obj_mask.view(bs * num_cam * num_color, ch, img_h, img_w) 
+        obj_mask = torch.all(obj_mask, dim = 1) 
 
-        det_box = masks_to_boxes(obj_mask)  # Left shape: (bs * num_cam * num_color, 4)
-        rescale_det_box = rescale_box(det_box, (img.shape[4], img.shape[3]), scale_ratio = self.cfg['POLICY']['EXTERNAL_DET_SCALE_FACTOR']) # Left shape: (bs * num_cam * num_color, 4)
-        idxs = torch.arange(bs * num_cam).to(rescale_det_box.device)[:, None, None].expand(-1, num_color, -1).reshape(bs * num_cam * num_color, 1)   # Left shape: (bs * num_cam * num_color, 1)
-        rescale_det_box = torch.cat([idxs, rescale_det_box], dim = 1) # Left shape: (bs * num_cam * num_color, 5)
+        det_box = masks_to_boxes(obj_mask)  
+        rescale_det_box = rescale_box(det_box, (img.shape[4], img.shape[3]), scale_ratio = self.cfg['POLICY']['EXTERNAL_DET_SCALE_FACTOR']) 
+        idxs = torch.arange(bs * num_cam).to(rescale_det_box.device)[:, None, None].expand(-1, num_color, -1).reshape(bs * num_cam * num_color, 1)   
+        rescale_det_box = torch.cat([idxs, rescale_det_box], dim = 1) 
         resize_scale = (self.cfg['DATA']['ROI_RESIZE_SHAPE'][1], self.cfg['DATA']['ROI_RESIZE_SHAPE'][0])
-        view_img = img.view(bs * num_cam, ch, img_h, img_w)   # Left shape: (bs * num_cam, 3, img_h, img_w)
-        sample_img = torchvision.ops.roi_align(input = view_img, boxes = rescale_det_box, output_size = resize_scale)   # Left shape: (bs * num_cam * num_color, ch, img_h, img_w)
-        sample_img = sample_img.view(bs, num_cam, num_color, ch, sample_img.shape[-2], sample_img.shape[-1])    # Left shape: (bs, num_cam, num_color, ch, img_h, img_w)
-        sample_img_mask = torch.zeros((bs, num_cam, num_color, sample_img.shape[-2] // 14, sample_img.shape[-1] // 14), dtype = torch.bool, device = sample_img.device) # Left shape: (bs, num_cam, num_color, img_h // 14, img_w // 14)
+        view_img = img.view(bs * num_cam, ch, img_h, img_w)   
+        sample_img = torchvision.ops.roi_align(input = view_img, boxes = rescale_det_box, output_size = resize_scale)   
+        sample_img = sample_img.view(bs, num_cam, num_color, ch, sample_img.shape[-2], sample_img.shape[-1])    
+        sample_img_mask = torch.zeros((bs, num_cam, num_color, sample_img.shape[-2] // 14, sample_img.shape[-1] // 14), dtype = torch.bool, device = sample_img.device) 
 
         det_box[:, 0] = det_box[:, 0] / img_w
         det_box[:, 1] = det_box[:, 1] / img_h
@@ -241,9 +241,9 @@ def rescale_box(det_box, img_shape, scale_ratio = 1.0):
     img_w, img_h = img_shape
 
     det_box = det_box.view(bs, 2, 2)
-    det_box_center = det_box.mean(dim = 1)[:, None]   # Left shape: (bs, 1, 2)
-    det_box_wh = (det_box[:, 1] - det_box[:, 0])[:, None] # Left shape: (bs, 1, 2)
-    det_box = torch.cat((det_box_center - det_box_wh / 2 * scale_ratio, det_box_center + det_box_wh / 2 * scale_ratio), dim = 1)    # Left shape: (bs, 2, 2)
+    det_box_center = det_box.mean(dim = 1)[:, None]   
+    det_box_wh = (det_box[:, 1] - det_box[:, 0])[:, None] 
+    det_box = torch.cat((det_box_center - det_box_wh / 2 * scale_ratio, det_box_center + det_box_wh / 2 * scale_ratio), dim = 1)    
 
     det_box[:, :, 0] = torch.clamp(det_box[:, :, 0], min = 0, max = img_w - 1)
     det_box[:, :, 1] = torch.clamp(det_box[:, :, 1], min = 0, max = img_h - 1)

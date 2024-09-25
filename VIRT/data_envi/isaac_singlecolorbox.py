@@ -68,14 +68,14 @@ class GripperSingleColorBox():
             args.pipeline = 'CPU'
             args.use_gpu_pipeline = False
 
-        # Default to PhysX
+        
         args.physics_engine = gymapi.SIM_PHYSX
         args.use_gpu = (args.sim_device_type == 'cuda')
 
         if args.flex:
             args.physics_engine = gymapi.SIM_FLEX
 
-        # Using --nographics implies --headless
+        
         if no_graphics and args.nographics:
             args.headless = True
 
@@ -87,16 +87,16 @@ class GripperSingleColorBox():
     def create_gym_env(self,):
         torch.set_printoptions(precision=4, sci_mode=False)
 
-        # acquire gym interface
+        
         self.gym = gymapi.acquire_gym()
 
         self.controller = "ik"
         self.sim_type = self.args.physics_engine
 
-        # set torch device
+        
         self.device = self.args.sim_device if self.args.use_gpu_pipeline else 'cpu'
 
-        # configure sim
+        
         self.sim_params = gymapi.SimParams()
         self.sim_params.up_axis = gymapi.UP_AXIS_Z
         self.sim_params.gravity = gymapi.Vec3(0.0, 0.0, -9.8)
@@ -130,24 +130,24 @@ class GripperSingleColorBox():
         self.damping = 0.05
         self.recoding_data_flag = False
 
-        # create sim
+        
         self.sim = self.gym.create_sim(self.args.compute_device_id, self.args.graphics_device_id, self.args.physics_engine, self.sim_params)
         if self.sim is None:
             raise Exception("Failed to create sim")
 
-        # create viewer
+        
         self.viewer = self.gym.create_viewer(self.sim, gymapi.CameraProperties())
         if self.viewer is None:
             print("*** Failed to create viewer")
             quit()
 
-        # create table asset
+        
         table_dims = gymapi.Vec3(0.6, 1.0, 0.4)
         asset_options = gymapi.AssetOptions()
         asset_options.fix_base_link = True
         table_asset = self.gym.create_box(self.sim, table_dims.x, table_dims.y, table_dims.z, asset_options)
 
-        # create container asset
+        
         container_bottom_dims = gymapi.Vec3(0.3, 0.2, 0.01)
         container_front_dims  = gymapi.Vec3(0.02, 0.2, 0.05)
         container_back_dims   = gymapi.Vec3(0.02, 0.2, 0.05)
@@ -165,12 +165,12 @@ class GripperSingleColorBox():
         container_left_asset   = self.gym.create_box(self.sim, container_left_dims.x, container_left_dims.y, container_left_dims.z, asset_options)
         container_right_asset  = self.gym.create_box(self.sim, container_right_dims.x, container_right_dims.y, container_right_dims.z, asset_options)
 
-        # create box asset
+        
         box_size = 0.045
         asset_options = gymapi.AssetOptions()
         box_asset = self.gym.create_box(self.sim, box_size, box_size, box_size, asset_options)
             
-        # load franka asset
+        
         asset_root = "/home/cvte/Documents/isaacgym/assets"
         franka_asset_file = "urdf/franka_description/robots/franka_panda.urdf"
         asset_options = gymapi.AssetOptions()
@@ -180,37 +180,37 @@ class GripperSingleColorBox():
         asset_options.flip_visual_attachments = True
         franka_asset = self.gym.load_asset(self.sim, asset_root, franka_asset_file, asset_options)
         self.body_dict = self.gym.get_asset_rigid_body_dict(franka_asset)
-        # {'panda_hand': 8, 'panda_leftfinger': 9, 'panda_link0': 0, 'panda_link1': 1, 'panda_link2': 2, 'panda_link3': 3, 'panda_link4': 4, 'panda_link5': 5, 'panda_link6': 6, 'panda_link7': 7, 'panda_rightfinger': 10}
+        
 
-        # configure franka dofs
+        
         franka_dof_props = self.gym.get_asset_dof_properties(franka_asset)
         self.franka_lower_limits = franka_dof_props["lower"]
         self.franka_upper_limits = franka_dof_props["upper"]
         franka_mids = 0.3 * (self.franka_upper_limits + self.franka_lower_limits)
-        # Set position drive for all dofs
+        
         franka_dof_props["driveMode"][:7].fill(gymapi.DOF_MODE_POS)
         franka_dof_props["stiffness"][:7].fill(400.0)
         franka_dof_props["damping"][:7].fill(40.0)
-        # Joint 7 and 8 are the gripper open and close joints.
+        
         franka_dof_props["driveMode"][7:].fill(gymapi.DOF_MODE_POS)
         franka_dof_props["stiffness"][7:].fill(800.0)
         franka_dof_props["damping"][7:].fill(40.0)
 
-        # default dof states and position targets
+        
         franka_num_dofs = self.gym.get_asset_dof_count(franka_asset)
         default_dof_pos = np.zeros(franka_num_dofs, dtype=np.float32)
         default_dof_pos[:7] = franka_mids[:7]
-        # grippers open
+        
         default_dof_pos[7:] = self.franka_upper_limits[7:]
 
         default_dof_state = np.zeros(franka_num_dofs, gymapi.DofState.dtype)
         default_dof_state["pos"] = default_dof_pos
 
-        # get link index of panda hand, which we will use as end effector
+        
         franka_link_dict = self.gym.get_asset_rigid_body_dict(franka_asset)
         franka_hand_index = franka_link_dict["panda_hand"]
 
-        # configure env grid
+        
         num_envs = self.num_envs
         num_per_row = int(math.sqrt(num_envs))
         spacing = 1.0
@@ -255,20 +255,20 @@ class GripperSingleColorBox():
         self.hand_idxs = []
         self.task_instruction = []
 
-        # add ground plane
+        
         plane_params = gymapi.PlaneParams()
         plane_params.normal = gymapi.Vec3(0, 0, 1)
         self.gym.add_ground(self.sim, plane_params)
 
         for i in range(num_envs):
-            # create env
+            
             env = self.gym.create_env(self.sim, env_lower, env_upper, num_per_row)
             self.envs.append(env)
 
-            # add table
+            
             table_handle = self.gym.create_actor(env, table_asset, table_pose, "table", i, 0)
 
-            # add container
+            
             container_bottom_handle = self.gym.create_actor(env, container_bottom_asset, container_bottom_pose, "container_bottom", i, 0)
             container_front_handle = self.gym.create_actor(env, container_front_asset, container_front_pose, "container_front", i, 0)
             container_back_handle = self.gym.create_actor(env, container_back_asset, container_back_pose, "container_back", i, 0)
@@ -277,7 +277,7 @@ class GripperSingleColorBox():
             for container_handle in [container_bottom_handle, container_front_handle, container_back_handle, container_left_handle, container_right_handle]:
                 self.gym.set_rigid_body_color(env, container_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, gymapi.Vec3(np.array(0.2), np.array(0.2), np.array(0.2)))
 
-            # add box
+            
             rerange_flag = True
             while rerange_flag:
                 stack_groups = []
@@ -307,28 +307,28 @@ class GripperSingleColorBox():
                 env_box_idxs_dict[box_color] = box_idx
             self.box_idxs.append(env_box_idxs_dict)
 
-            # add franka
+            
             franka_handle = self.gym.create_actor(env, franka_asset, franka_pose, "franka", i, 2)
 
-            # set dof properties
+            
             self.gym.set_actor_dof_properties(env, franka_handle, franka_dof_props)
 
-            # set initial dof states
+            
             self.gym.set_actor_dof_states(env, franka_handle, default_dof_state, gymapi.STATE_ALL)
 
-            # set initial position targets
+            
             self.gym.set_actor_dof_position_targets(env, franka_handle, default_dof_pos)
 
-            # get global index of hand in rigid body state tensor
+            
             hand_idx = self.gym.find_actor_rigid_body_index(env, franka_handle, "panda_hand", gymapi.DOMAIN_SIM)
             self.hand_idxs.append(hand_idx)
 
-            # Generate language instruction.
+            
             self.box_sample_ids = random.sample(range(0, box_num), 1)
             box_color_list = list(box_colors.keys())
             self.task_instruction.append("{}".format(box_color_list[self.box_sample_ids[0]],))
 
-        # point camera at middle env
+        
         cam_pos = gymapi.Vec3(4, 3, 2)
         cam_target = gymapi.Vec3(-4, -3, 0)
         middle_env = self.envs[num_envs // 2 + num_per_row // 2]
@@ -339,25 +339,25 @@ class GripperSingleColorBox():
         camera_props.height = 240
         self.cameras = []
         for env in self.envs:
-            # Top camera
+            
             top_camera = self.gym.create_camera_sensor(env, camera_props)
             camera_pos = gymapi.Vec3(0.5, 0, 1.5)
             camera_target = gymapi.Vec3(0, 0, -1)
             self.gym.set_camera_location(top_camera, env, camera_pos, camera_target)
 
-            # Side camera 1
+            
             side_camera1 = self.gym.create_camera_sensor(env, camera_props)
             camera_pos = gymapi.Vec3(0.5, 0.7, 0.8)
             camera_target = gymapi.Vec3(0, -3, -0.5)
             self.gym.set_camera_location(side_camera1, env, camera_pos, camera_target)
 
-            # Side camera 2
+            
             side_camera2 = self.gym.create_camera_sensor(env, camera_props)
             camera_pos = gymapi.Vec3(0.5, -0.7, 0.8)
             camera_target = gymapi.Vec3(0, 3, -0.5)
             self.gym.set_camera_location(side_camera2, env, camera_pos, camera_target)
 
-            # Hand camera
+            
             hand_camera = self.gym.create_camera_sensor(env, camera_props)
             local_transform = gymapi.Transform()
             local_transform.p = gymapi.Vec3(0.1, 0, 0)
@@ -367,42 +367,42 @@ class GripperSingleColorBox():
 
             self.cameras.append(dict(top_camera = top_camera, side_camera1 = side_camera1, side_camera2 = side_camera2, hand_camera = hand_camera))
 
-        # ==== prepare tensors =====
-        # from now on, we will use the tensor API that can run on CPU or GPU
+        
+        
         self.gym.prepare_sim(self.sim)
 
-        # get jacobian tensor
-        # for fixed-base franka, tensor has shape (num envs, 10, 6, 9)
+        
+        
         _jacobian = self.gym.acquire_jacobian_tensor(self.sim, "franka")
         jacobian = gymtorch.wrap_tensor(_jacobian)
 
-        # jacobian entries corresponding to franka hand
+        
         self.j_eef = jacobian[:, franka_hand_index - 1, :, :7]
         
-        # get mass matrix tensor
+        
         _massmatrix = self.gym.acquire_mass_matrix_tensor(self.sim, "franka")
         mm = gymtorch.wrap_tensor(_massmatrix)
-        self.mm = mm[:, :7, :7]          # only need elements corresponding to the franka arm
+        self.mm = mm[:, :7, :7]          
 
-        # get rigid body state tensor
+        
         _rb_states = self.gym.acquire_rigid_body_state_tensor(self.sim)
         self.rb_states = gymtorch.wrap_tensor(_rb_states)
 
-        # get dof state tensor
+        
         _dof_states = self.gym.acquire_dof_state_tensor(self.sim)
         dof_states = gymtorch.wrap_tensor(_dof_states)
         self.dof_pos = dof_states[:, 0].view(num_envs, 9, 1)
 
-        # Set action tensors
+        
         self.pos_action = torch.zeros_like(self.dof_pos).squeeze(-1)
         self.effort_action = torch.zeros_like(self.pos_action)
 
     def update_simulator_before_ctrl(self):
-        # step the physics
+        
         self.gym.simulate(self.sim)
         self.gym.fetch_results(self.sim, True)
 
-        # refresh tensors
+        
         self.gym.refresh_rigid_body_state_tensor(self.sim)
         self.gym.refresh_dof_state_tensor(self.sim)
         self.gym.refresh_jacobian_tensors(self.sim)
@@ -411,7 +411,7 @@ class GripperSingleColorBox():
         self.gym.start_access_image_tensors(self.sim)
 
     def update_simulator_after_ctrl(self):
-        # step rendering
+        
         self.gym.step_graphics(self.sim)
         self.gym.draw_viewer(self.viewer, self.sim, False)
         self.gym.sync_frame_time(self.sim)
@@ -464,7 +464,7 @@ class GripperSingleColorBox():
         return q_r[:, 0:3] * torch.sign(q_r[:, 3]).unsqueeze(-1)
 
     def control_ik(self, dpose):
-        # solve damped least squares
+        
         kp = 0.2
         j_eef_T = torch.transpose(self.j_eef, 1, 2)
         lmbda = torch.eye(6, device=dpose.device) * (self.damping ** 2)

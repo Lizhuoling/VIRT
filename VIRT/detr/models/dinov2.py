@@ -48,7 +48,7 @@ class DinoVisionTransformer(nn.Module):
         proj_bias=True,
         drop_path_rate=0.0,
         drop_path_uniform=False,
-        init_values=None,  # for layerscale: None or 0 => no layerscale
+        init_values=None,  
         embed_layer=PatchEmbed,
         act_layer=nn.GELU,
         block_fn=Block,
@@ -86,7 +86,7 @@ class DinoVisionTransformer(nn.Module):
         super().__init__()
         norm_layer = partial(nn.LayerNorm, eps=1e-6)
 
-        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
+        self.num_features = self.embed_dim = embed_dim  
         self.num_tokens = 1
         self.n_blocks = depth
         self.num_heads = num_heads
@@ -108,7 +108,7 @@ class DinoVisionTransformer(nn.Module):
         if drop_path_uniform is True:
             dpr = [drop_path_rate] * depth
         else:
-            dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+            dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  
 
         if ffn_layer == "mlp":
             logger.info("using MLP layer as FFN")
@@ -147,7 +147,7 @@ class DinoVisionTransformer(nn.Module):
             chunked_blocks = []
             chunksize = depth // block_chunks
             for i in range(0, depth, chunksize):
-                # this is to keep the block index consistent if we chunk the block list
+                
                 chunked_blocks.append([nn.Identity()] * i + blocks_list[i : i + chunksize])
             self.blocks = nn.ModuleList([BlockChunk(p) for p in chunked_blocks])
         else:
@@ -180,18 +180,18 @@ class DinoVisionTransformer(nn.Module):
         dim = x.shape[-1]
         w0 = w // self.patch_size
         h0 = h // self.patch_size
-        # we add a small number to avoid floating point error in the interpolation
-        # see discussion at https://github.com/facebookresearch/dino/issues/8
-        # DINOv2 with register modify the interpolate_offset from 0.1 to 0.0
+        
+        
+        
         w0, h0 = w0 + self.interpolate_offset, h0 + self.interpolate_offset
-        # w0, h0 = w0 + 0.1, h0 + 0.1
+        
         
         sqrt_N = math.sqrt(N)
         sx, sy = float(w0) / sqrt_N, float(h0) / sqrt_N
         patch_pos_embed = nn.functional.interpolate(
             patch_pos_embed.reshape(1, int(sqrt_N), int(sqrt_N), dim).permute(0, 3, 1, 2),
             scale_factor=(sx, sy),
-            # (int(w0), int(h0)), # to solve the upsampling shape issue
+            
             mode="bicubic",
             antialias=self.interpolate_antialias
         )
@@ -230,7 +230,7 @@ class DinoVisionTransformer(nn.Module):
 
         roi_x = torch.cat((self.cls_token.expand(roi_x.shape[0], -1, -1), roi_x), dim=1)
         roi_x = roi_x + self.interpolate_pos_encoding(roi_x, w, h)
-        roi_x = roi_x[:, 1:]    # Remove the cls token
+        roi_x = roi_x[:, 1:]    
 
         return roi_x
 
@@ -254,7 +254,7 @@ class DinoVisionTransformer(nn.Module):
 
     def _get_intermediate_layers_not_chunked(self, x, n=1):
         x = self.prepare_tokens_with_masks(x)
-        # If n is an int, take the n last blocks. If it's a list, take them
+        
         output, total_block_len = [], len(self.blocks)
         blocks_to_take = range(total_block_len - n, total_block_len) if isinstance(n, int) else n
         for i, blk in enumerate(self.blocks):
@@ -267,10 +267,10 @@ class DinoVisionTransformer(nn.Module):
     def _get_intermediate_layers_chunked(self, x, n=1):
         x = self.prepare_tokens_with_masks(x)
         output, i, total_block_len = [], 0, len(self.blocks[-1])
-        # If n is an int, take the n last blocks. If it's a list, take them
+        
         blocks_to_take = range(total_block_len - n, total_block_len) if isinstance(n, int) else n
         for block_chunk in self.blocks:
-            for blk in block_chunk[i:]:  # Passing the nn.Identity()
+            for blk in block_chunk[i:]:  
                 x = blk(x)
                 if i in blocks_to_take:
                     output.append(x)
@@ -281,7 +281,7 @@ class DinoVisionTransformer(nn.Module):
     def get_intermediate_layers(
         self,
         x: torch.Tensor,
-        n: Union[int, Sequence] = 1,  # Layers or n last layers to take
+        n: Union[int, Sequence] = 1,  
         reshape: bool = False,
         return_class_token: bool = False,
         norm=True

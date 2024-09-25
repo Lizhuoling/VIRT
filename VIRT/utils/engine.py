@@ -14,11 +14,11 @@ def _find_free_port():
     import socket
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # Binding to port 0 will cause the OS to find an available port for us
+    
     sock.bind(("", 0))
     port = sock.getsockname()[1]
     sock.close()
-    # NOTE: there is still a chance the port could be taken by other processes.
+    
     return port
 
 def launch(main_func, args):
@@ -45,7 +45,7 @@ def launch(main_func, args):
 
         torch.cuda.set_device(int(os.environ['LOCAL_RANK']))
 
-        # Setup the local process group (which contains ranks within the same machine)
+        
         assert comm._LOCAL_PROCESS_GROUP is None
         assert int(os.environ['WORLD_SIZE']) % args.num_nodes == 0, "WORLD_SIZE should be divisible by NUM_NODES."
         num_gpus_per_machine = int(os.environ['WORLD_SIZE']) // args.num_nodes

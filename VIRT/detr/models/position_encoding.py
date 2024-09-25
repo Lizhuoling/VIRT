@@ -29,9 +29,9 @@ class PositionEmbeddingSine(nn.Module):
 
     def forward(self, tensor):
         x = tensor
-        # mask = tensor_list.mask
-        # assert mask is not None
-        # not_mask = ~mask
+        
+        
+        
 
         not_mask = torch.ones_like(x[0, [0]])
         y_embed = not_mask.cumsum(1, dtype=torch.float32)
@@ -84,7 +84,7 @@ def build_position_encoding(cfg):
     N_steps = cfg['POLICY']['HIDDEN_DIM'] // 2
 
     if cfg['POLICY']['POSITION_EMBEDDING'] in ('v2', 'sine'):
-        # TODO find a better way of exposing other arguments
+        
         position_embedding = PositionEmbeddingSine(N_steps, normalize=True)
     elif cfg['POLICY']['POSITION_EMBEDDING'] in ('v3', 'learned'):
         position_embedding = PositionEmbeddingLearned(N_steps)

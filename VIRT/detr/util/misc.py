@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+
 """
 Misc functions, including distributed helpers.
 
@@ -17,7 +17,7 @@ import torch
 import torch.distributed as dist
 from torch import Tensor
 
-# needed due to empty tensor bug in pytorch and torchvision 0.5
+
 import torchvision
 if version.parse(torchvision.__version__) < version.parse('0.7'):
     from torchvision.ops import _new_empty_tensor
@@ -98,21 +98,21 @@ def all_gather(data):
     if world_size == 1:
         return [data]
 
-    # serialized to a Tensor
+    
     buffer = pickle.dumps(data)
     storage = torch.ByteStorage.from_buffer(buffer)
     tensor = torch.ByteTensor(storage).to("cuda")
 
-    # obtain Tensor size of each rank
+    
     local_size = torch.tensor([tensor.numel()], device="cuda")
     size_list = [torch.tensor([0], device="cuda") for _ in range(world_size)]
     dist.all_gather(size_list, local_size)
     size_list = [int(size.item()) for size in size_list]
     max_size = max(size_list)
 
-    # receiving Tensor from all ranks
-    # we pad the tensor because torch all_gather does not support
-    # gathering tensors of different shapes
+    
+    
+    
     tensor_list = []
     for _ in size_list:
         tensor_list.append(torch.empty((max_size,), dtype=torch.uint8, device="cuda"))
@@ -144,7 +144,7 @@ def reduce_dict(input_dict, average=True):
     with torch.no_grad():
         names = []
         values = []
-        # sort the keys so that they are consistent across processes
+        
         for k in sorted(input_dict.keys()):
             names.append(k)
             values.append(input_dict[k])
@@ -273,7 +273,7 @@ def collate_fn(batch):
 
 
 def _max_by_axis(the_list):
-    # type: (List[List[int]]) -> List[int]
+    
     maxes = the_list[0]
     for sublist in the_list[1:]:
         for index, item in enumerate(sublist):
@@ -287,7 +287,7 @@ class NestedTensor(object):
         self.mask = mask
 
     def to(self, device):
-        # type: (Device) -> NestedTensor # noqa
+        
         cast_tensor = self.tensors.to(device)
         mask = self.mask
         if mask is not None:
@@ -305,16 +305,16 @@ class NestedTensor(object):
 
 
 def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
-    # TODO make this more general
+    
     if tensor_list[0].ndim == 3:
         if torchvision._is_tracing():
-            # nested_tensor_from_tensor_list() does not export well to ONNX
-            # call _onnx_nested_tensor_from_tensor_list() instead
+            
+            
             return _onnx_nested_tensor_from_tensor_list(tensor_list)
 
-        # TODO make it support different-sized images
+        
         max_size = _max_by_axis([list(img.shape) for img in tensor_list])
-        # min_size = tuple(min(s) for s in zip(*[img.shape for img in tensor_list]))
+        
         batch_shape = [len(tensor_list)] + max_size
         b, c, h, w = batch_shape
         dtype = tensor_list[0].dtype
@@ -329,8 +329,8 @@ def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
     return NestedTensor(tensor, mask)
 
 
-# _onnx_nested_tensor_from_tensor_list() is an implementation of
-# nested_tensor_from_tensor_list() that is supported by ONNX tracing.
+
+
 @torch.jit.unused
 def _onnx_nested_tensor_from_tensor_list(tensor_list: List[Tensor]) -> NestedTensor:
     max_size = []
@@ -339,10 +339,10 @@ def _onnx_nested_tensor_from_tensor_list(tensor_list: List[Tensor]) -> NestedTen
         max_size.append(max_size_i)
     max_size = tuple(max_size)
 
-    # work around for
-    # pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
-    # m[: img.shape[1], :img.shape[2]] = False
-    # which is not yet supported in onnx
+    
+    
+    
+    
     padded_imgs = []
     padded_masks = []
     for img in tensor_list:
@@ -449,7 +449,7 @@ def accuracy(output, target, topk=(1,)):
 
 
 def interpolate(input, size=None, scale_factor=None, mode="nearest", align_corners=None):
-    # type: (Tensor, Optional[List[int]], Optional[float], str, Optional[bool]) -> Tensor
+    
     """
     Equivalent to nn.functional.interpolate, but with support for empty batch sizes.
     This will eventually be supported natively by PyTorch, and this

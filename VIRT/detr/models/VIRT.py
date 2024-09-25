@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+
 """
 DETR model and criterion classes.
 """
@@ -24,8 +24,8 @@ def get_sinusoid_encoding_table(n_position, d_hid):
         return [position / np.power(10000, 2 * (hid_j // 2) / d_hid) for hid_j in range(d_hid)]
 
     sinusoid_table = np.array([get_position_angle_vec(pos_i) for pos_i in range(n_position)])
-    sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2])  # dim 2i
-    sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  # dim 2i+1
+    sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2])  
+    sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  
 
     return torch.FloatTensor(sinusoid_table).unsqueeze(0)
 
@@ -56,7 +56,7 @@ class VIRT(nn.Module):
         else:
             query_num = chunk_size
         self.query_embed = nn.Embedding(query_num, hidden_dim)
-        self.action_head = nn.Linear(hidden_dim, state_dim) # Decode transformer output as action.
+        self.action_head = nn.Linear(hidden_dim, state_dim) 
         if self.cfg['POLICY']['USE_UNCERTAINTY']:
             self.uncern_head = nn.Linear(hidden_dim, 1)
         if self.cfg['POLICY']['STATUS_PREDICT']:
@@ -67,18 +67,18 @@ class VIRT(nn.Module):
             img_token_len = self.cfg['DATA']['IMG_RESIZE_SHAPE'][1] * self.cfg['DATA']['IMG_RESIZE_SHAPE'][0] // 14 // 14
             self.image_pos_embed = nn.Embedding(img_token_len, hidden_dim)
 
-        # Proprioception information encoding.
+        
         if 'past_action' in self.cfg['DATA']['INPUT_KEYS']:
-            self.past_action_mlp = nn.Linear(9, hidden_dim)  # Past action information encoding
+            self.past_action_mlp = nn.Linear(9, hidden_dim)  
             self.past_action_pos_emb = nn.Embedding(self.cfg['DATA']['PAST_ACTION_LEN'], hidden_dim)
         if 'observations/end_observation' in self.cfg['DATA']['INPUT_KEYS'] or 'observations/joint_observation' in self.cfg['DATA']['INPUT_KEYS']:
             self.obs_pos_emb = nn.Embedding(self.cfg['DATA']['PAST_OBSERVATION_LEN'], hidden_dim)
             if 'observations/end_observation' in self.cfg['DATA']['INPUT_KEYS']:
-                self.end_obs_mlp = nn.Linear(13, hidden_dim) # End observation information encoding
+                self.end_obs_mlp = nn.Linear(13, hidden_dim) 
                 self.end_obs_pos_emb = nn.Embedding(1, hidden_dim)
             if 'observations/joint_observation' in self.cfg['DATA']['INPUT_KEYS']:
                 self.joint_obs_pos_emb = nn.Embedding(1, hidden_dim)
-                self.joint_obs_mlp = nn.Linear(9, hidden_dim) # Joint observation information encoding
+                self.joint_obs_mlp = nn.Linear(9, hidden_dim) 
         
         if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
             self.object_detector = get_detector(cfg)
@@ -100,85 +100,85 @@ class VIRT(nn.Module):
         is_pad: (batch, chunk_size)
         task_instruction_list: A list with the length of batch, each element is a string.
         """
-        is_training = action is not None # train or val
+        is_training = action is not None 
         bs, num_cam, in_c, in_h, in_w = image.shape
         
         if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
             assert self.cfg['POLICY']['BACKBONE'] == 'dinov2_s', "ROI image backbone only supports DINOv2 now!"
-            roi_box, roi_img = self.object_detector(image, task_instruction_list, status)  # roi_box shape: (bs, num_cam, num_detbox, 4), roi_img shape: (bs, num_cam, num_detbox, 3, roi_h, roi_w)
+            roi_box, roi_img = self.object_detector(image, task_instruction_list, status)  
             _, _, num_detbox, _, roi_h, roi_w = roi_img.shape
             assert num_detbox == 1
             roi_img = roi_img.view(bs * num_cam * num_detbox, 3, roi_h, roi_w)
             roi_box = roi_box.view(bs, num_cam * num_detbox, 4)
-            roi_box_emb = self.obj_box_mlp(roi_box) # Left shape: (bs, num_cam, C)
+            roi_box_emb = self.obj_box_mlp(roi_box) 
             
-        # Image observation features and position embeddings
-        image = image.view(bs * num_cam, in_c, in_h, in_w)  # Left shape: (bs * num_cam, C, H, W)
+        
+        image = image.view(bs * num_cam, in_c, in_h, in_w)  
 
         if self.cfg['POLICY']['BACKBONE'] == 'dinov2_s':
             if is_training and self.cfg['POLICY']['GRID_MASK'] == True:
                 image = self.grid_mask(image)
-            features = self.backbone.forward_features(image)['x_norm_patchtokens']  # Left shape: (bs * num_cam, l, C)
+            features = self.backbone.forward_features(image)['x_norm_patchtokens']  
             proj_features = self.input_proj(features)
-            src = proj_features.view(bs, -1, self.hidden_dim).permute(1, 0, 2)   # Left shape: (num_cam * l, B, C)
-            image_pos_embed = self.image_pos_embed.weight[None, None, :, :].expand(bs, num_cam, -1, -1)  # (B, num_cam, l, C)
-            pos = image_pos_embed.reshape(bs, -1, self.hidden_dim).permute(1, 0, 2)  # Left shape: (num_cam * l, B, C)
+            src = proj_features.view(bs, -1, self.hidden_dim).permute(1, 0, 2)   
+            image_pos_embed = self.image_pos_embed.weight[None, None, :, :].expand(bs, num_cam, -1, -1)  
+            pos = image_pos_embed.reshape(bs, -1, self.hidden_dim).permute(1, 0, 2)  
 
             if self.cfg["POLICY"]["EXTERNAL_DET"] != 'None':
-                roi_feature = self.backbone.forward_features(roi_img)['x_norm_patchtokens']  # Left shape: (bs * num_cam, roi_l, C)
-                proj_roi_feature = self.input_proj(roi_feature).view(bs, num_cam, -1, self.hidden_dim)   # Left shape: (bs, num_cam, roi_l, C)
-                proj_roi_feature = proj_roi_feature + roi_box_emb[:, :, None] # Left shape: (bs, num_cam, roi_l, C)
-                proj_roi_feature = proj_roi_feature.view(bs, -1, self.hidden_dim).permute(1, 0, 2)  # Left shape: (num_cam * roi_l, B, C)
-                src = torch.cat((src, proj_roi_feature), dim = 0)  # Left shape: (l, B, C)
-                roi_pos = self.roi_pos.weight[None, :, :].expand(bs, -1, -1).permute(1, 0, 2)  # Left shape: (num_cam * l, B, C)
-                pos = torch.cat((pos, roi_pos), axis = 0)  # Left shape: (num_cam * l, B, C)
+                roi_feature = self.backbone.forward_features(roi_img)['x_norm_patchtokens']  
+                proj_roi_feature = self.input_proj(roi_feature).view(bs, num_cam, -1, self.hidden_dim)   
+                proj_roi_feature = proj_roi_feature + roi_box_emb[:, :, None] 
+                proj_roi_feature = proj_roi_feature.view(bs, -1, self.hidden_dim).permute(1, 0, 2)  
+                src = torch.cat((src, proj_roi_feature), dim = 0)  
+                roi_pos = self.roi_pos.weight[None, :, :].expand(bs, -1, -1).permute(1, 0, 2)  
+                pos = torch.cat((pos, roi_pos), axis = 0)  
         else:
             raise NotImplementedError
-        mask = torch.zeros((bs, src.shape[0]), dtype=torch.bool).to(image.device)   # Left shape: (B, NHW)
+        mask = torch.zeros((bs, src.shape[0]), dtype=torch.bool).to(image.device)   
 
-        # proprioception features
+        
         if 'past_action' in self.cfg['DATA']['INPUT_KEYS']:
-            past_action_src = self.past_action_mlp(past_action).permute(1, 0, 2)   # (past_action_len, B, C)
-            past_action_pos = self.past_action_pos_emb.weight[:, None, :].expand(-1, bs, -1)  # (past_action_len, B, C)
-            src = torch.cat((src, past_action_src), dim = 0)  # Left shape: (L, B, C)
-            pos = torch.cat((pos, past_action_pos), dim = 0)  # Left shape: (L, B, C)
-            mask = torch.cat((mask, past_action_is_pad), dim = 1) # Left shape: (B, L)
+            past_action_src = self.past_action_mlp(past_action).permute(1, 0, 2)   
+            past_action_pos = self.past_action_pos_emb.weight[:, None, :].expand(-1, bs, -1)  
+            src = torch.cat((src, past_action_src), dim = 0)  
+            pos = torch.cat((pos, past_action_pos), dim = 0)  
+            mask = torch.cat((mask, past_action_is_pad), dim = 1) 
         if 'observations/end_observation' in self.cfg['DATA']['INPUT_KEYS']:
-            end_obs_src = self.end_obs_mlp(end_obs).permute(1, 0, 2)    # (past_obs_len, B, C)
-            end_obs_pos = self.obs_pos_emb.weight[:, None, :].expand(-1, bs, -1) + self.end_obs_pos_emb.weight[:, None, :]  # (past_obs_len, B, C)
-            src = torch.cat((src, end_obs_src), dim = 0)  # Left shape: (L, B, C)
-            pos = torch.cat((pos, end_obs_pos), dim = 0)  # Left shape: (L, B, C)
-            mask = torch.cat((mask, observation_is_pad), dim = 1) # Left shape: (B, L)
+            end_obs_src = self.end_obs_mlp(end_obs).permute(1, 0, 2)    
+            end_obs_pos = self.obs_pos_emb.weight[:, None, :].expand(-1, bs, -1) + self.end_obs_pos_emb.weight[:, None, :]  
+            src = torch.cat((src, end_obs_src), dim = 0)  
+            pos = torch.cat((pos, end_obs_pos), dim = 0)  
+            mask = torch.cat((mask, observation_is_pad), dim = 1) 
         if 'observations/joint_observation' in self.cfg['DATA']['INPUT_KEYS']:
-            joint_obs_src = self.joint_obs_mlp(joint_obs).permute(1, 0, 2)    # (past_obs_len, B, C)
-            joint_obs_pos = self.obs_pos_emb.weight[:, None, :].expand(-1, bs, -1) + self.joint_obs_pos_emb.weight[:, None, :]  # (past_obs_len, B, C)
-            src = torch.cat((src, joint_obs_src), dim = 0)  # Left shape: (L, B, C)
-            pos = torch.cat((pos, joint_obs_pos), dim = 0)  # Left shape: (L, B, C)
-            mask = torch.cat((mask, observation_is_pad), dim = 1) # Left shape: (B, L)
+            joint_obs_src = self.joint_obs_mlp(joint_obs).permute(1, 0, 2)    
+            joint_obs_pos = self.obs_pos_emb.weight[:, None, :].expand(-1, bs, -1) + self.joint_obs_pos_emb.weight[:, None, :]  
+            src = torch.cat((src, joint_obs_src), dim = 0)  
+            pos = torch.cat((pos, joint_obs_pos), dim = 0)  
+            mask = torch.cat((mask, observation_is_pad), dim = 1) 
     
-        query_emb = self.query_embed.weight.unsqueeze(1).repeat(1, bs, 1)   # Left shape: (num_query, B, C)
-        hs = self.transformer(src, mask, query_emb, pos) # Left shape: (num_dec, B, num_query, C)
+        query_emb = self.query_embed.weight.unsqueeze(1).repeat(1, bs, 1)   
+        hs = self.transformer(src, mask, query_emb, pos) 
         if self.cfg['POLICY']['STATUS_PREDICT']:
-            status_hs = hs[:, :, 0] # Left shape: (num_dec, B, C)
+            status_hs = hs[:, :, 0] 
             hs = hs[:, :, 1:]
-            status_pred = self.status_head(status_hs)  # left shape: (num_dec, B, num_status)
-            if not is_training: status_pred = status_pred[-1].argmax(dim = -1)  # Left shape: (B,)
+            status_pred = self.status_head(status_hs)  
+            if not is_training: status_pred = status_pred[-1].argmax(dim = -1)  
         else:
             status_pred = None
         
-        if not is_training: hs = hs[-1] # Left shape: (B, num_query, C)
+        if not is_training: hs = hs[-1] 
 
-        a_hat = self.action_head(hs)    # left shape: (num_dec, B, num_query, action_dim)
-        if self.cfg['POLICY']['OUTPUT_MODE'] == 'relative': # Only the robotic arm joint is controlled with relative signal, the gripper is still controlled absolutely.
-            cur_status = end_obs[:, -1, :7][:, None, :] # left shape: (B, 1, action_dim)
-            if is_training: cur_status = cur_status[None]   # left shape: (1, B, 1, action_dim)
+        a_hat = self.action_head(hs)    
+        if self.cfg['POLICY']['OUTPUT_MODE'] == 'relative': 
+            cur_status = end_obs[:, -1, :7][:, None, :] 
+            if is_training: cur_status = cur_status[None]   
             a_hat[..., :7] = a_hat[..., :7] + cur_status
         elif self.cfg['POLICY']['OUTPUT_MODE'] == 'absolute':
             pass
         else:
             raise NotImplementedError
         if self.cfg['POLICY']['USE_UNCERTAINTY']:
-            a_hat_uncern = self.uncern_head(hs) # left shape: (num_dec, B, num_query, 1)
+            a_hat_uncern = self.uncern_head(hs) 
             a_hat_uncern = torch.clamp(a_hat_uncern, min = self.cfg['POLICY']['UNCERTAINTY_RANGE'][0], max = self.cfg['POLICY']['UNCERTAINTY_RANGE'][1])
         else:
             a_hat_uncern = None
@@ -198,12 +198,12 @@ def mlp(input_dim, hidden_dim, output_dim, hidden_depth):
 
 
 def build_encoder(cfg):
-    d_model = cfg['POLICY']['HIDDEN_DIM'] # 256
-    dropout = cfg['POLICY']['DROPOUT'] # 0.1
-    nhead = cfg['POLICY']['NHEADS'] # 8
-    dim_feedforward = cfg['POLICY']['DIM_FEEDFORWARD'] # 2048
-    num_encoder_layers = cfg['POLICY']['ENC_LAYERS'] # 4 # TODO shared with VAE decoder
-    normalize_before = False # False
+    d_model = cfg['POLICY']['HIDDEN_DIM'] 
+    dropout = cfg['POLICY']['DROPOUT'] 
+    nhead = cfg['POLICY']['NHEADS'] 
+    dim_feedforward = cfg['POLICY']['DIM_FEEDFORWARD'] 
+    num_encoder_layers = cfg['POLICY']['ENC_LAYERS'] 
+    normalize_before = False 
     activation = "relu"
 
     encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward,
@@ -215,9 +215,9 @@ def build_encoder(cfg):
 
 
 def get_VIRT_model(cfg):
-    # From state
-    # backbone = None # from state for now, no need for conv nets
-    # From image
+    
+    
+    
     backbone = build_backbone(cfg)
     transformer = build_transformer(cfg)
 

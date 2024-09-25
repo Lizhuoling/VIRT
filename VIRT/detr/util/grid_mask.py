@@ -17,7 +17,7 @@ class GridMask(nn.Module):
         self.prob = prob
 
     def set_prob(self, epoch, max_epoch):
-        self.prob = self.st_prob * epoch / max_epoch #+ 1.#0.5
+        self.prob = self.st_prob * epoch / max_epoch 
 
     def forward(self, x):
         if np.random.rand() > self.prob or not self.training:

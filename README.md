@@ -11,10 +11,11 @@ This is the official implementation of the paper "VIRT: Vision Instructed Roboti
 ## Table of Contents:
 1. [Installation](#installation)
 2. [Data](#data)
-3. [Training](#training)
-4. [Evaluation](#evaluation)
-5. [License](#license)
-6. [Citing](#citing)
+3. [Pre-trained Model](#Model)
+4. [Training](#training)
+5. [Evaluation](#evaluation)
+6. [License](#license)
+7. [Citing](#citing)
 
 
 ## Installation <a name="installation"></a>
@@ -62,9 +63,13 @@ $ROOT/VIRT/datasets
 ```
 The folders `isaac_singlebox`, `isaac_singlecolorbox`, and `isaac_multicolorbox` correspond to the aforementioned three simulated tasks, respectively.
 
+## Pre-trained Model <a name="Model"></a>
+
+We provide the policy weight of the VIRT model pre-trained by the proposed RIP paradigm at [here](xxx). Please download it and save it as `$ROOT/VIRT/pretrained/VIRT_droid_pretrain.ckpt`.
+
 ## Training <a name="training"></a>
 
-For training VIRT, you can use the following script template:
+For training VIRT, you can run the following script template at `ROOT/VIRT`:
 ``` bash
 torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_node --node_rank=$node_rank --master_addr=$master_addr --master_port $master_port \
     main.py \
@@ -72,6 +77,7 @@ torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_node --node_rank=$node_ran
     --save_dir ./outputs/$exp_id \
     --data_dir $data_path \
     --num_nodes $nnodes \
+    --load_pretrain pretrained/VIRT_droid_pretrain.ckpt
 ```
 Specifically, we provide config names of the three provided simulated tasks in `$ROOT/VIRT/configs`, and `$config_name` is the path of the config file corresponding the experiment you want to try. The variable `$data_path` is the path to the corresponding dataset, e.g., `$ROOT/VIRT/datasets/isaac_singlebox` for the task `Move a Single Box`. The training logs and checkpoint models will be saved in `./outputs/$exp_id`. If you only want to use one GPU to train, the variables `$nnodes`, `$nproc_per_node`, and `$node_rank` should be set to `1`, `1`, and `0`, respectively. `$master_addr` is the IP address of your computer and can be set to `127.0.0.1`. `$master_port` can be `29515`, and it must be different for different experiments if you are running multiple experiments simultaneously. Our code supports multi-mode multi-GPU training.
 
@@ -85,7 +91,7 @@ torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_node --node_rank=$node_ran
     --save_dir outputs/$exp_id \
     --load_dir outputs/$exp_id/policy_latest.ckpt \
     --num_nodes $nnodes \
-    --eval \
+    --eval
 ```
 The variables are set in the same way as the training script.
 

@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+
 """
 DETR Transformer class.
 
@@ -60,8 +60,8 @@ class Transformer(nn.Module):
         tgt = torch.zeros_like(query_embed)
         memory = self.encoder(src, src_key_padding_mask=mask, pos=pos_embed)
         hs = self.decoder(tgt, memory, memory_key_padding_mask=mask,
-                          pos=pos_embed, query_pos=query_embed) # Left shape: (num_dec, num_query, B, C)
-        hs = hs.transpose(1, 2) # Left shape: (num_dec, B, num_query, C)
+                          pos=pos_embed, query_pos=query_embed) 
+        hs = hs.transpose(1, 2) 
         return hs
 
 class TransformerEncoder(nn.Module):
@@ -135,7 +135,7 @@ class TransformerEncoderLayer(nn.Module):
                  activation="relu", normalize_before=False):
         super().__init__()
         self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
-        # Implementation of Feedforward model
+        
         self.linear1 = nn.Linear(d_model, dim_feedforward)
         self.dropout = nn.Dropout(dropout)
         self.linear2 = nn.Linear(dim_feedforward, d_model)
@@ -196,7 +196,7 @@ class TransformerDecoderLayer(nn.Module):
         super().__init__()
         self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
         self.multihead_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
-        # Implementation of Feedforward model
+        
         self.linear1 = nn.Linear(d_model, dim_feedforward)
         self.dropout = nn.Dropout(dropout)
         self.linear2 = nn.Linear(dim_feedforward, d_model)

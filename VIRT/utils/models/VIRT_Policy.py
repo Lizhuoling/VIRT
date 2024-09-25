@@ -21,22 +21,22 @@ class VIRT_Policy(nn.Module):
 
     def __call__(self, image, past_action, end_obs, joint_obs, action=None, observation_is_pad = None, past_action_is_pad = None, action_is_pad = None, task_instruction_list = None, status = None):
         env_state = None
-        if action is not None: # training or validation time
+        if action is not None: 
             a_hat, a_hat_uncern, status_pred = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, action = action, \
                             observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, action_is_pad = action_is_pad, task_instruction_list = task_instruction_list, status = status)
             loss_dict = dict()
-            all_l1 = F.l1_loss(action.unsqueeze(0).expand(a_hat.shape[0], -1, -1, -1), a_hat, reduction='none') # Left shape: (num_dec, B, num_query, num_action)
-            expand_action_is_pad = action_is_pad[None, :, :, None].expand(all_l1.shape[0], -1, -1, all_l1.shape[3])    # action_is_pad shape: (B, num_query), expand_action_is_pad shape: (num_dec, B, num_query, num_action)
-            mask_l1 = (all_l1 * ~expand_action_is_pad).sum(dim = -1) # Left shape: (num_dec, B, num_query)
+            all_l1 = F.l1_loss(action.unsqueeze(0).expand(a_hat.shape[0], -1, -1, -1), a_hat, reduction='none') 
+            expand_action_is_pad = action_is_pad[None, :, :, None].expand(all_l1.shape[0], -1, -1, all_l1.shape[3])    
+            mask_l1 = (all_l1 * ~expand_action_is_pad).sum(dim = -1) 
             if self.cfg['POLICY']['USE_UNCERTAINTY']:
-                a_hat_uncern = a_hat_uncern.squeeze(-1) # Left shape: (num_dec, B, num_query)
+                a_hat_uncern = a_hat_uncern.squeeze(-1) 
                 a_hat_uncern[action_is_pad[None].expand(a_hat_uncern.shape[0], -1, -1)] = a_hat_uncern[action_is_pad[None].expand(a_hat_uncern.shape[0], -1, -1)].detach()
-                uncern_l1 = math.sqrt(2) * mask_l1 / a_hat_uncern.exp() + a_hat_uncern  # Left shape: (num_dec, B, num_query)
+                uncern_l1 = math.sqrt(2) * mask_l1 / a_hat_uncern.exp() + a_hat_uncern  
             else:
                 uncern_l1 = mask_l1
-            uncern_l1 = uncern_l1.sum(-1)   # Left shape: (num_dec, B)
-            valid_count = torch.clip((~action_is_pad)[None].sum(dim = -1), min = 1)  # Left shape: (num_dec,)
-            l1 = (uncern_l1 / valid_count).mean(dim = -1)    # Left shape: (num_dec,)
+            uncern_l1 = uncern_l1.sum(-1)   
+            valid_count = torch.clip((~action_is_pad)[None].sum(dim = -1), min = 1)  
+            l1 = (uncern_l1 / valid_count).mean(dim = -1)    
             total_loss = l1.sum()
 
             if self.cfg['POLICY']['STATUS_PREDICT']:
@@ -46,7 +46,7 @@ class VIRT_Policy(nn.Module):
                     total_loss = total_loss + status_pred_loss
 
             if self.cfg['POLICY']['USE_UNCERTAINTY']:
-                l1_without_uncern = (mask_l1.sum(-1) / valid_count).mean(dim = -1)  # Left shape: (num_dec,)
+                l1_without_uncern = (mask_l1.sum(-1) / valid_count).mean(dim = -1)  
                 total_l1_without_uncern = l1_without_uncern.sum()
                 loss_dict['loss_without_uncern'] = total_l1_without_uncern.item()
             else:
@@ -56,7 +56,7 @@ class VIRT_Policy(nn.Module):
             loss_dict['total_loss'] = total_loss.item()
             
             return total_loss, loss_dict
-        else: # inference time
+        else: 
             a_hat, _, status_pred = self.model(image = image, past_action = past_action, end_obs = end_obs, joint_obs = joint_obs, env_state = env_state, \
                             observation_is_pad = observation_is_pad, past_action_is_pad = past_action_is_pad, task_instruction_list = task_instruction_list, status = status)
             return a_hat, status_pred

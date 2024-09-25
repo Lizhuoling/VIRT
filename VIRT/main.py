@@ -12,11 +12,11 @@ from tqdm import tqdm
 from einops import rearrange
 
 import isaacgym
-import torch    # torch must be imported after isaacgym
+import torch    
 from torch.utils.tensorboard import SummaryWriter
 
-from utils.dataset_utils import load_data # data functions
-from utils.dataset_utils import compute_dict_mean # helper functions
+from utils.dataset_utils import load_data 
+from utils.dataset_utils import compute_dict_mean 
 from utils.utils import set_seed
 from utils.engine import launch
 from utils import comm
@@ -30,7 +30,7 @@ import IPython
 e = IPython.embed
 
 def main(args):
-    # Initialize logger
+    
     if comm.get_rank() == 0 and not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
     exp_start_time = datetime.datetime.strftime(datetime.datetime.now(), '%m-%d %H:%M:%S')
@@ -42,7 +42,7 @@ def main(args):
         logger.info(args) 
         logger.info("Loaded configuration file {}".format(args.config_name+'.yaml'))
     
-    # Initialize cfg
+    
     cfg = load_yaml_with_base(os.path.join('configs', args.config_name+'.yaml'))
     cfg['IS_EVAL'] = args.eval
     cfg['CKPT_DIR'] = args.save_dir
@@ -72,7 +72,7 @@ def main(args):
     
     train_dataloader, val_dataloader, stats, = load_data(cfg)
     
-    # save dataset stats
+    
     if not os.path.isdir(cfg['CKPT_DIR']):
         os.makedirs(cfg['CKPT_DIR'])
     stats_path = os.path.join(cfg['CKPT_DIR'], f'dataset_stats.pkl')
@@ -94,7 +94,7 @@ def eval_bc(cfg, ckpt_path, save_episode=True):
     ckpt_name = ckpt_path.split('/')[-1]
     policy_class = cfg['POLICY']['POLICY_NAME']
     
-    # load policy and stats
+    
     policy = make_policy(policy_class, cfg)
     loading_status = policy.load_state_dict(torch.load(ckpt_path)['model'], strict = True)
     print(loading_status)
@@ -119,7 +119,7 @@ def eval_bc(cfg, ckpt_path, save_episode=True):
 
         print(summary_str)
 
-        # save success rate to txt
+        
         result_file_name = 'result_' + ckpt_name.split('.')[0] + '.txt'
         with open(os.path.join(ckpt_dir, result_file_name), 'w') as f:
             f.write(summary_str)
@@ -178,11 +178,11 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir = '', load_pretrain
     for data, iter_cnt in zip(train_dataloader, range(start_iter, num_iterations)):
         data_time = time.time() - end
 
-        # training
+        
         policy.train()
         optimizer.zero_grad()
         total_loss, loss_dict = forward_pass(data, policy, cfg)
-        # backward
+        
         total_loss.backward()
         optimizer.step()
         if iter_cnt < warmup_iters:
@@ -197,7 +197,7 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir = '', load_pretrain
         eta_seconds = train_meters.time.global_avg * (num_iterations - iter_cnt)
         eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
         
-        # log
+        
         if main_thread and (iter_cnt % cfg['TRAIN']['LOG_INTERVAL'] == 0 or iter_cnt == num_iterations - 1):
             logger.info(
                 train_meters.delimiter.join(
@@ -220,7 +220,7 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir = '', load_pretrain
                 tb_writer.add_scalar(f'loss/{loss_key}', loss_dict[loss_key], iter_cnt)
             tb_writer.add_scalar('state/lr', optimizer.param_groups[0]["lr"], iter_cnt)
 
-        # validation
+        
         if cfg['EVAL']['DATA_EVAL_RATIO'] > 0 and main_thread and iter_cnt % cfg['EVAL']['EVAL_INTERVAL'] == 0 and iter_cnt != 0:
             logger.info("Start evaluation at iteration {}...".format(iter_cnt))
             with torch.inference_mode():
@@ -245,7 +245,7 @@ def train_bc(train_dataloader, val_dataloader, cfg, load_dir = '', load_pretrain
                 summary_string += f'{k}: {v.item():.3f} '
             logger.info(summary_string)
 
-        # Save checkpoint
+        
         if main_thread and iter_cnt % cfg['TRAIN']['SAVE_CHECKPOINT_INTERVAL'] == 0 and iter_cnt != 0:
             ckpt_path = os.path.join(ckpt_dir, f'policy_latest.ckpt')
             if os.path.exists(ckpt_path):

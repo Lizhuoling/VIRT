@@ -36,7 +36,7 @@ def get_norm_stats(dataset_dir, norm_keys, norm_max_len = -1):
         norm_data_dict[norm_key] = torch.cat(norm_data_dict[norm_key], axis = 0)
         mean_std_dict[norm_key + '_mean'] = norm_data_dict[norm_key].mean(dim=0)
         mean_std_dict[norm_key + '_std'] = norm_data_dict[norm_key].std(dim=0)
-        mean_std_dict[norm_key + '_std'] = torch.clip(mean_std_dict[norm_key + '_std'], 1e-2, np.inf) # avoid the std to be too small.
+        mean_std_dict[norm_key + '_std'] = torch.clip(mean_std_dict[norm_key + '_std'], 1e-2, np.inf) 
     
     return mean_std_dict
 
@@ -73,7 +73,7 @@ def load_data(cfg):
     else:
         train_indices = shuffled_indices
     
-    # construct dataset and dataloader
+    
     if cfg['POLICY']['POLICY_NAME'] == 'VIRT':
         train_transforms = build_VIRTTransforms(cfg, is_train = True)
         train_dataset = VIRTDataset(cfg, transforms = train_transforms, norm_stats = norm_stats, ids_map_dict = ids_map_dict, indices = train_indices, is_train = True)

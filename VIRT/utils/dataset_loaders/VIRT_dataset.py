@@ -59,7 +59,7 @@ class VIRTDataset(torch.utils.data.Dataset):
             episode_len = root['/action'].shape[0]
             start_ts = hdf5_frame_id
 
-            # get observation at start_ts only
+            
             past_obs_len, obs_sample_interval = self.cfg['DATA']['PAST_OBSERVATION_LEN'], self.cfg['DATA']['OBSERVATION_SAMPLE_INTERVAL']
             end_observation = np.zeros((past_obs_len, root['/observations/end_observation'][:].shape[1]), np.float32)
             joint_observation = np.zeros((past_obs_len, root['/observations/joint_observation'][:].shape[1]), np.float32)
@@ -74,7 +74,7 @@ class VIRTDataset(torch.utils.data.Dataset):
                 joint_observation[-valid_past_num - 1:] = root['/observations/joint_observation'][st : start_ts + 1 : obs_sample_interval]
                 observation_len = valid_past_num + 1
             observation_is_pad = np.zeros(self.cfg['DATA']['PAST_OBSERVATION_LEN'])
-            observation_is_pad[:-observation_len] = 1   # Invalid observation
+            observation_is_pad[:-observation_len] = 1   
             
             image_dict = dict()
             for cam_name in self.camera_names:
@@ -92,7 +92,7 @@ class VIRTDataset(torch.utils.data.Dataset):
                 past_action[-valid_past_num - 1:] = root['/action'][st : start_ts + 1 : past_action_interval]
                 past_action_len = valid_past_num + 1
             past_action_is_pad = np.zeros(self.cfg['DATA']['PAST_ACTION_LEN'])
-            past_action_is_pad[:-past_action_len] = 1   # Invalid past action
+            past_action_is_pad[:-past_action_len] = 1   
             
             if root['/action'].shape[0] >= start_ts + self.cfg['POLICY']['CHUNK_SIZE'] + 1:
                 action = root['/action'][start_ts + 1 : start_ts + self.cfg['POLICY']['CHUNK_SIZE'] + 1]
@@ -111,7 +111,7 @@ class VIRTDataset(torch.utils.data.Dataset):
                 task_instruction = np.array(root['/task_instruction']).item().decode('utf-8')
 
             if self.cfg['POLICY']['STATUS_PREDICT'] and 'seg_keyframe' in root.keys():
-                seg_keyframe = root['/seg_keyframe'][:] # Left shape: (key_num, 2). The first number is frame id and the second one is status id.
+                seg_keyframe = root['/seg_keyframe'][:] 
                 if hdf5_frame_id < seg_keyframe[0][0]: 
                     status = 0
                 elif hdf5_frame_id >= seg_keyframe[0][0] and hdf5_frame_id < seg_keyframe[-1][0]:
@@ -124,23 +124,23 @@ class VIRTDataset(torch.utils.data.Dataset):
             else:
                 status = 0
 
-        # new axis for different cameras
+        
         all_cam_images = []
         for cam_name in self.camera_names:
             all_cam_images.append(image_dict[cam_name])
-        all_cam_images = np.stack(all_cam_images, axis=0)   # Left shape: (n, h, w, 3)
+        all_cam_images = np.stack(all_cam_images, axis=0)   
         
-        # construct observations
-        image_data = torch.from_numpy(all_cam_images).float() / 255   # left shape: (n, h, w, c)
-        end_observation = torch.from_numpy(end_observation).float()  # left shape: (obs_len, end_dim)
-        joint_observation = torch.from_numpy(joint_observation).float() # left shape: (obs_len, joint_dim)
-        past_action = torch.from_numpy(past_action).float()   # left shape: (past_action_len, action_dim)
-        action_data = torch.from_numpy(padded_action).float()   # left shape: (chunk_size, action_dim)
-        observation_is_pad = torch.from_numpy(observation_is_pad).bool()    # left shape: (obs_len,)
-        past_action_is_pad = torch.from_numpy(past_action_is_pad).bool()    # left shape: (past_action_len,)
-        action_is_pad = torch.from_numpy(action_is_pad).bool()    # left shape: (chunk_size,)
         
-        # channel last
+        image_data = torch.from_numpy(all_cam_images).float() / 255   
+        end_observation = torch.from_numpy(end_observation).float()  
+        joint_observation = torch.from_numpy(joint_observation).float() 
+        past_action = torch.from_numpy(past_action).float()   
+        action_data = torch.from_numpy(padded_action).float()   
+        observation_is_pad = torch.from_numpy(observation_is_pad).bool()    
+        past_action_is_pad = torch.from_numpy(past_action_is_pad).bool()    
+        action_is_pad = torch.from_numpy(action_is_pad).bool()    
+        
+        
         image_data = torch.einsum('k h w c -> k c h w', image_data)
         
         action_mean_key, action_std_key = self.retrieve_key(self.norm_stats.keys(), "action_mean"), self.retrieve_key(self.norm_stats.keys(), "action_std")
