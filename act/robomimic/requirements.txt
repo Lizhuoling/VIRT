@@ -1,6 +1,0 @@
-psutil
-termcolor
-imageio-ffmpeg
-egl_probe>=1.0.1
-diffusers==0.11.1
-pytorch3d==0.7.3

@@ -1,89 +1,107 @@
-# ACT: Action Chunking with Transformers
+# VIRT: Vision Instructed Robotic Transformer for Manipulation Learning
 
-### *New*: [ACT tuning tips](https://docs.google.com/document/d/1FVIZfoALXg_ZkYKaYVh-qOlaXveq5CtvJHXkY25eYhs/edit?usp=sharing)
-TL;DR: if your ACT policy is jerky or pauses in the middle of an episode, just train for longer! Success rate and smoothness can improve way after loss plateaus.
+[[`Project Page`](https://lizhuoling.github.io/xxx/)] [[`Paper Link`](xxx)] [[`Code Link`](xxx)] [[`Data Link`](xxx)]
 
-#### Project Website: https://tonyzhaozh.github.io/aloha/
+This is the official implementation of the paper "VIRT: Vision Instructed Robotic Transformer for Manipulation Learning".
 
-This repo contains the implementation of ACT, together with 2 simulated environments:
-Transfer Cube and Bimanual Insertion. You can train and evaluate ACT in sim or real.
-For real, you would also need to install [ALOHA](https://github.com/tonyzhaozh/aloha).
+<p align="center">
+    <img src=".github/teaser.jpg" alt="" width="100%"/>
+</p>
 
-### Updates:
-You can find all scripted/human demo for simulated environments [here](https://drive.google.com/drive/folders/1gPR03v05S1xiInoVJn7G7VJ9pDCnxq9O?usp=share_link).
-
-
-### Repo Structure
-- ``imitate_episodes.py`` Train and Evaluate ACT
-- ``policy.py`` An adaptor for ACT policy
-- ``detr`` Model definitions of ACT, modified from DETR
-- ``sim_env.py`` Mujoco + DM_Control environments with joint space control
-- ``ee_sim_env.py`` Mujoco + DM_Control environments with EE space control
-- ``scripted_policy.py`` Scripted policies for sim environments
-- ``constants.py`` Constants shared across files
-- ``utils.py`` Utils such as data loading and helper functions
-- ``visualize_episodes.py`` Save videos from a .hdf5 dataset
+## Table of Contents:
+1. [Installation](#installation)
+2. [Data](#data)
+3. [Training](#training)
+4. [Evaluation](#evaluation)
+5. [License](#license)
+6. [Citing](#citing)
 
 
-### Installation
+## Installation <a name="installation"></a>
+To prepare the environment, please first create a conda environment with the following command. We do not recommend using other python versions because Isaac Gym may not support them.
+``` bash
+conda create -n VIRT python=3.8
+conda activate VIRT
+```
+Then, please install Isaac Gym following the instructions in [Isaac Gym](https://developer.nvidia.com/isaac-gym). Our used version is 1.0.preview4. You need to install Isaac Gym using a computer with visualization and at least a GPU. Cuda should also be installed. After installing Isaac Gym, move to the installation path and run the following commands:
+```
+cd isaacgym/python
+pip install -e .
+```
+Now, please go to the root directory of this project and install the following dependencies:
+```
+pip install torch==2.3.1 torchvision==0.18.1
+pip install pyquaternion
+pip install pyyaml
+pip install rospkg
+pip install pexpect
+pip install opencv-python
+pip install matplotlib
+pip install einops
+pip install packaging
+pip install h5py
+pip install ipython
+pip install xformers==0.0.27
+pip install tensorboard
+pip install tqdm
+cd VIRT/detr && pip install -e . && cd ../..
+```
 
-    conda create -n aloha python=3.8.10
-    conda activate aloha
-    pip install torchvision
-    pip install torch
-    pip install pyquaternion
-    pip install pyyaml
-    pip install rospkg
-    pip install pexpect
-    pip install mujoco==2.3.7
-    pip install dm_control==1.0.14
-    pip install opencv-python
-    pip install matplotlib
-    pip install einops
-    pip install packaging
-    pip install h5py
-    pip install ipython
-    cd act/detr && pip install -e .
+## Data <a name="data"></a>
+We provide our collected teleoperation data of the three simulated tasks, including 'Move a Single Box', 'Transport the Specified Box', and 'Stack the Specified Boxes'. You can download the data from [here](xxx).  Please unzip the data and put it in the `ROOT/VIRT/datasets` directory. The data saving structure should look like:
+```
+$ROOT/VIRT/datasets
+├── isaac_singlebox
+│   ├── h5py
+│   ├── exterior_camera1
+│   ├── exterior_camera2
+│   ├── top_camera
+│   ├── wrist_camera
+├── isaac_singlecolorbox
+├── isaac_multicolorbox
+```
+The folders `isaac_singlebox`, `isaac_singlecolorbox`, and `isaac_multicolorbox` correspond to the aforementioned three simulated tasks, respectively.
 
-### Example Usages
+## Training <a name="training"></a>
 
-To set up a new terminal, run:
+For training VIRT, you can use the following script template:
+``` bash
+torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_node --node_rank=$node_rank --master_addr=$master_addr --master_port $master_port \
+    main.py \
+    --config_name $config_name \
+    --save_dir ./outputs/$exp_id \
+    --data_dir $data_path \
+    --num_nodes $nnodes \
+```
+Specifically, we provide config names of the three provided simulated tasks in `$ROOT/VIRT/configs`, and `$config_name` is the path of the config file corresponding the experiment you want to try. The variable `$data_path` is the path to the corresponding dataset, e.g., `$ROOT/VIRT/datasets/isaac_singlebox` for the task `Move a Single Box`. The training logs and checkpoint models will be saved in `./outputs/$exp_id`. If you only want to use one GPU to train, the variables `$nnodes`, `$nproc_per_node`, and `$node_rank` should be set to `1`, `1`, and `0`, respectively. `$master_addr` is the IP address of your computer and can be set to `127.0.0.1`. `$master_port` can be `29515`, and it must be different for different experiments if you are running multiple experiments simultaneously. Our code supports multi-mode multi-GPU training.
 
-    conda activate aloha
-    cd <path to act repo>
+## Evaluation <a name="evaluation"></a>
 
-### Simulated experiments
+For evaluating the trained policy, you can follow the script command template as follows:
+``` bash
+torchrun --nnodes=$nnodes --nproc_per_node=$nproc_per_node --node_rank=$node_rank --master_addr=$master_addr --master_port $master_port \
+    main.py \
+    --config_name $config_name \
+    --save_dir outputs/$exp_id \
+    --load_dir outputs/$exp_id/policy_latest.ckpt \
+    --num_nodes $nnodes \
+    --eval \
+```
+The variables are set in the same way as the training script.
 
-We use ``sim_transfer_cube_scripted`` task in the examples below. Another option is ``sim_insertion_scripted``.
-To generated 50 episodes of scripted data, run:
+## License <a name="license"></a>
+This project is released under [CC-BY-NC 4.0](LICENSE.md).
 
-    python3 record_sim_episodes.py \
-    --task_name sim_transfer_cube_scripted \
-    --dataset_dir <data save dir> \
-    --num_episodes 50
+## Citing <a name="citing"></a>
 
-To can add the flag ``--onscreen_render`` to see real-time rendering.
-To visualize the episode after it is collected, run
+Please use the following BibTeX entry if you find our work useful:
 
-    python3 visualize_episodes.py --dataset_dir <data save dir> --episode_idx 0
-
-To train ACT:
-    
-    # Transfer Cube task
-    python3 imitate_episodes.py \
-    --task_name sim_transfer_cube_scripted \
-    --ckpt_dir <ckpt dir> \
-    --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 8 --dim_feedforward 3200 \
-    --num_epochs 2000  --lr 1e-5 \
-    --seed 0
-
-
-To evaluate the policy, run the same command but add ``--eval``. This loads the best validation checkpoint.
-The success rate should be around 90% for transfer cube, and around 50% for insertion.
-To enable temporal ensembling, add flag ``--temporal_agg``.
-Videos will be saved to ``<ckpt_dir>`` for each rollout.
-You can also add ``--onscreen_render`` to see real-time rendering during evaluation.
-
-For real-world data where things can be harder to model, train for at least 5000 epochs or 3-4 times the length after the loss has plateaued.
-Please refer to [tuning tips](https://docs.google.com/document/d/1FVIZfoALXg_ZkYKaYVh-qOlaXveq5CtvJHXkY25eYhs/edit?usp=sharing) for more info.
+```BibTeX
+@article{li2024virt,
+  title={VIRT: Vision Instructed Robotic Transformer for Manipulation Learning},
+  author={xxx},
+  journal={xxx},
+  year={2024}
+}
+```
 
