@@ -1,6 +1,6 @@
 # VIRT: Vision Instructed Robotic Transformer for Manipulation Learning
 
-[[`Project Page`](https://lizhuoling.github.io/xxx/)] [[`Paper Link`](xxx)] [[`Code Link`](https://github.com/Lizhuoling/VIRT)] [[`Data Link`](https://huggingface.co/datasets/Zhuoling98/VIRT_data)]
+[[`Project Page`](https://lizhuoling.github.io/VIRT_webpage/)] [[`Paper Link`](xxx)] [[`Code Link`](https://github.com/Lizhuoling/VIRT)] [[`Data Link`](https://huggingface.co/datasets/Zhuoling98/VIRT_data)]
 
 This is the official implementation of the paper "VIRT: Vision Instructed Robotic Transformer for Manipulation Learning".
 
@@ -49,7 +49,7 @@ cd VIRT/detr && pip install -e . && cd ../..
 ```
 
 ## Data <a name="data"></a>
-We provide our collected teleoperation data of the three simulated tasks, including 'Move a Single Box', 'Transport the Specified Box', and 'Stack the Specified Boxes'. You can download the data from [here](xxx).  Please unzip the data and put it in the `ROOT/VIRT/datasets` directory. The data saving structure should look like:
+We provide our collected teleoperation data of the three simulated tasks, including 'Move a Single Box', 'Transport the Specified Box', and 'Stack the Specified Boxes'. You can download the data from [here](https://huggingface.co/datasets/Zhuoling98/VIRT_data).  Please unzip the data and put it in the `ROOT/VIRT/datasets` directory. The data saving structure should look like:
 ```
 $ROOT/VIRT/datasets
 ├── isaac_singlebox
@@ -105,8 +105,8 @@ Please use the following BibTeX entry if you find our work useful:
 ```BibTeX
 @article{li2024virt,
   title={VIRT: Vision Instructed Robotic Transformer for Manipulation Learning},
-  author={xxx},
-  journal={xxx},
+  author={Zhuoling, Li and Liangliang, Ren and Jinrong, Yang and Yong, Zhao and others},
+  journal={arXiv preprint arXiv:xxxx.xxxxx},
   year={2024}
 }
 ```
