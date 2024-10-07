@@ -1,6 +1,6 @@
 # VIRT: Vision Instructed Robotic Transformer for Manipulation Learning
 
-[[`Project Page`](https://lizhuoling.github.io/xxx/)] [[`Paper Link`](xxx)] [[`Code Link`](xxx)] [[`Data Link`](xxx)]
+[[`Project Page`](https://lizhuoling.github.io/xxx/)] [[`Paper Link`](xxx)] [[`Code Link`](https://github.com/Lizhuoling/VIRT)] [[`Data Link`](https://huggingface.co/datasets/Zhuoling98/VIRT_data)]
 
 This is the official implementation of the paper "VIRT: Vision Instructed Robotic Transformer for Manipulation Learning".
 
@@ -65,7 +65,7 @@ The folders `isaac_singlebox`, `isaac_singlecolorbox`, and `isaac_multicolorbox`
 
 ## Pre-trained Model <a name="Model"></a>
 
-We provide the policy weight of the VIRT model pre-trained by the proposed RIP paradigm at [here](xxx). Please download it and save it as `$ROOT/VIRT/pretrained/VIRT_droid_pretrain.ckpt`.
+We provide the policy weight of the VIRT model pre-trained by the proposed RIP paradigm at [here](https://huggingface.co/Zhuoling98/VIRT_droid_pretrain). Please download it and save it as `$ROOT/VIRT/pretrained/VIRT_droid_pretrain.ckpt`.
 
 ## Training <a name="training"></a>
 
