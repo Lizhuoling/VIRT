@@ -1,6 +1,6 @@
 # VIRT: Vision Instructed Robotic Transformer for Manipulation Learning
 
-[[`Project Page`](https://lizhuoling.github.io/VIRT_webpage/)] [[`Paper Link`](xxx)] [[`Code Link`](https://github.com/Lizhuoling/VIRT)] [[`Data Link`](https://huggingface.co/datasets/Zhuoling98/VIRT_data)]
+[[`Project Page`](https://lizhuoling.github.io/VIRT_webpage/)] [[`Paper Link`]([xxx](https://arxiv.org/pdf/2410.07169))] [[`Code Link`](https://github.com/Lizhuoling/VIRT)] [[`Data Link`](https://huggingface.co/datasets/Zhuoling98/VIRT_data)]
 
 This is the official implementation of the paper "VIRT: Vision Instructed Robotic Transformer for Manipulation Learning".
 
@@ -106,7 +106,7 @@ Please use the following BibTeX entry if you find our work useful:
 @article{li2024virt,
   title={VIRT: Vision Instructed Robotic Transformer for Manipulation Learning},
   author={Zhuoling, Li and Liangliang, Ren and Jinrong, Yang and Yong, Zhao and others},
-  journal={arXiv preprint arXiv:xxxx.xxxxx},
+  journal={arXiv preprint arXiv:2410.07169},
   year={2024}
 }
 ```
