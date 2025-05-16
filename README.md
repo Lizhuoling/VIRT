@@ -103,11 +103,11 @@ This project is released under [CC-BY-NC 4.0](LICENSE.md).
 Please use the following BibTeX entry if you find our work useful:
 
 ```BibTeX
-@article{li2024virt,
+@article{li2025virt,
   title={VIP: Vision Instructed Pre-training for Robotic Manipulation},
   author={Zhuoling, Li and Liangliang, Ren and Jinrong, Yang and Yong, Zhao and others},
-  journal={arXiv preprint arXiv:2410.07169},
-  year={2024}
+  journal={ICML},
+  year={2025}
 }
 ```
 
